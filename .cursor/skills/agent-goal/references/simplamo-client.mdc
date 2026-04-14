@@ -1,0 +1,206 @@
+---
+description: Simplamo API client — HTTP wrapper, endpoints, error handling
+globs: backend/src/simplamo/**/*.ts,backend/src/agents/**/*.tools.ts
+alwaysApply: false
+---
+
+# Simplamo API Client Rules
+
+## Shared Axios Instance
+Tất cả tool đều dùng chung 1 axios instance — không tự tạo fetch/axios mới:
+
+```ts
+// backend/src/simplamo/simplamo.client.ts
+import axios, { AxiosInstance } from 'axios'
+import { Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+
+@Injectable()
+export class SimplamoClient {
+  private readonly http: AxiosInstance
+
+  constructor(private config: ConfigService) {
+    this.http = axios.create({
+      baseURL: 'https://api.simplamo.com/api',
+      headers: {
+        Authorization: `Bearer ${this.config.get('SIMPLAMO_API_TOKEN')}`,
+        'Content-Type': 'application/json',
+        'tenant-id': 'core',
+        'content-language': 'en',
+      },
+      timeout: 10000,
+    })
+  }
+
+  // Rocks (Goals)
+  async listRocks(params: { teamId: string; sessionId: string; rock?: string; pic?: string }) {
+    const { data } = await this.http.get('/eos-core/rocks', { params })
+    return data  // returns array of rock objects directly
+  }
+
+  async getRockDetail(rockId: string) {
+    const { data } = await this.http.get(`/eos-core/rocks/${rockId}`)
+    return data
+  }
+
+  async updateRockStatus(rockId: string, status: 'ON_TRACK' | 'OFF_TRACK' | 'AT_RISK' | 'DONE') {
+    const { data } = await this.http.patch(`/eos-core/rocks/${rockId}`, { status })
+    return data
+  }
+
+  // Metrics
+  async listMetrics(params?: { teamId?: string }) {
+    const { data } = await this.http.get('/eos-core/metrics', { params })
+    return data
+  }
+
+  async getMetricValues(metricId: string, params?: { from?: string; to?: string }) {
+    const { data } = await this.http.get(`/eos-core/metrics/${metricId}/values`, { params })
+    return data
+  }
+
+  async getTeamScorecard(teamId: string) {
+    const { data } = await this.http.get('/eos-core/metrics/scorecard', { params: { teamId } })
+    return data
+  }
+
+  // Actions
+  async listActions(params?: { goalId?: string; status?: string; teamId?: string }) {
+    const { data } = await this.http.get('/eos-core/actions', { params })
+    return data
+  }
+
+  async createAction(payload: { title: string; goalId?: string; dueDate?: string; priority?: string; owner?: string }) {
+    const { data } = await this.http.post('/eos-core/actions', payload)
+    return data
+  }
+
+  async updateActionStatus(actionId: string, done: boolean) {
+    const { data } = await this.http.patch(`/eos-core/actions/${actionId}`, { done })
+    return data
+  }
+}
+```
+
+## Simplamo Module
+```ts
+// backend/src/simplamo/simplamo.module.ts
+@Global()
+@Module({
+  providers: [SimplamoClient],
+  exports: [SimplamoClient],
+})
+export class SimplamoModule {}
+```
+
+## API Endpoints (real Simplamo)
+```
+GET  /api/eos-core/rocks?teamId=&sessionId=  → danh sách rocks (array trực tiếp)
+GET  /api/eos-core/rocks/:id                → chi tiết 1 rock
+PATCH /api/eos-core/rocks/:id               → cập nhật rock status
+
+GET  /api/eos-core/metrics?teamId=           → danh sách metrics/KPIs
+GET  /api/eos-core/metrics/:id/values        → lịch sử giá trị thực tế
+GET  /api/eos-core/metrics/scorecard?teamId= → scorecard của team
+
+GET  /api/eos-core/actions?goalId=&status=   → danh sách actions (filter được)
+POST /api/eos-core/actions                   → tạo action mới
+PATCH /api/eos-core/actions/:id              → cập nhật trạng thái
+```
+
+## Required Headers
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+tenant-id: core
+content-language: en
+```
+
+## Rock Response Shape (từ API thật)
+```json
+{
+  "_id": "68d12ec0acfbac001c36c8eb",
+  "title": "Sản xuất 13 video quảng bá",
+  "teamId": "60fd7f693e81570057440b4f",
+  "status": "ON_TRACK",           // ON_TRACK | OFF_TRACK | AT_RISK | DONE
+  "percentDone": 33,
+  "dueDate": "2025-12-31T16:59:00.999Z",
+  "startDate": "2025-09-30T17:00:00.000Z",
+  "rockType": "individual",       // individual | company
+  "description": "<HTML>",
+  "ownerId": "...",
+  "rockOwner": { "_id": "...", "fullName": "Anna Nguyen", "email": "...", "avatar": "..." },
+  "milestones": [
+    {
+      "_id": "...",
+      "title": "Số lượng video SX",
+      "status": "ON_TRACK",
+      "type": "MEASURABLE",
+      "currentPercent": 5,
+      "fromValue": 1,
+      "toValue": 13,
+      "assignee": { "fullName": "..." }
+    }
+  ],
+  "parentRock": { "_id": "...", "title": "...", "percentDone": 54 },
+  "doneMilestones": 0,
+  "totalMilestones": 1,
+  "sessionName": "Q4 / 2025",
+  "sessionId": "68bfd79c1f6d94001b24c070"
+}
+```
+
+## Error Handling Pattern
+Tool functions phải bắt lỗi, không để throw lên agent:
+
+```ts
+execute: async ({ rockId }) => {
+  try {
+    const data = await simplamoClient.getRockDetail(rockId)
+
+    return JSON.stringify({
+      success: true,
+      rock: {
+        id: data._id,
+        title: data.title,
+        percentDone: data.percentDone,
+        dueDate: data.dueDate,
+        status: data.status,
+      }
+    })
+  } catch (err: any) {
+    const status = err.response?.status
+    if (status === 404) return JSON.stringify({ success: false, error: 'Rock không tồn tại' })
+    if (status === 401) return JSON.stringify({ success: false, error: 'Token Simplamo không hợp lệ' })
+    return JSON.stringify({ success: false, error: err.message })
+  }
+}
+```
+
+## Data Trimming — Quan Trọng
+Simplamo API trả response lớn (many rocks, milestones nested).
+Luôn format/trim trước khi đưa vào LLM context:
+
+```ts
+// BAD — dump toàn bộ response vào LLM
+return JSON.stringify(data)
+
+// GOOD — chỉ lấy fields LLM cần
+const trimmed = rocks.slice(0, 20).map(r => ({
+  id: r._id,
+  title: r.title,
+  percentDone: r.percentDone,
+  status: r.status,
+  dueDate: r.dueDate,
+  owner: r.rockOwner?.fullName,
+}))
+return JSON.stringify({ success: true, total: rocks.length, rocks: trimmed })
+```
+
+## Environment Variables
+```
+SIMPLAMO_API_TOKEN=your_token_here
+SIMPLAMO_TEAM_ID=60fd7f693e81570057440b4f
+SIMPLAMO_SESSION_ID=68bfd79c1f6d94001b24c070
+OPENAI_API_KEY=sk-...
+```

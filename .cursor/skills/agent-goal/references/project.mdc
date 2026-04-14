@@ -1,0 +1,81 @@
+---
+description: GoalMind AI — project context, always applied
+globs:
+alwaysApply: true
+---
+
+# GoalMind AI — Project Rules
+
+## What We're Building
+Hệ thống AI Agent cho phép user chat bằng tiếng Việt tự nhiên với dữ liệu
+quản trị thật từ Simplamo — Goals, Metrics, Actions.
+Không có database riêng — mọi data đều đến từ Simplamo API.
+
+## Architecture: 1 Orchestrator + 3 Specialist Agents
+```
+User message (tiếng Việt)
+        ↓
+  Orchestrator Agent
+  classifyIntent → routeToAgent
+        ↓
+┌──────────────┬──────────────┬──────────────┐
+Goal Agent     Metrics Agent  Action Agent
+(Rock/OKR)     (Scorecard/KPI) (Todo/Issue)
+      ↓               ↓              ↓
+      └───────────────┴──────────────┘
+              Simplamo API
+         https://api.simplamo.com
+```
+
+## Tech Stack
+- **Backend**: NestJS (TypeScript)
+- **AI Framework**: LangChain.js (`langchain`, `@langchain/openai`)
+- **LLM**: GPT-4o (`gpt-4o`) / GPT-4o-mini
+- **Data source**: Simplamo REST API (không có DB riêng)
+- **Frontend**: Next.js 15 + assistant-ui
+- **Streaming**: NestJS SSE → assistant-ui
+
+## Folder Structure
+```
+backend/
+  src/
+    agents/
+      orchestrator/
+        orchestrator.agent.ts
+        orchestrator.tools.ts
+      goal/
+        goal.agent.ts
+        goal.tools.ts        # wraps Simplamo Goal endpoints
+      metrics/
+        metrics.agent.ts
+        metrics.tools.ts     # wraps Simplamo Metric endpoints
+      action/
+        action.agent.ts
+        action.tools.ts      # wraps Simplamo Action endpoints
+    chat/
+      chat.controller.ts     # POST /api/chat
+      chat.service.ts
+    simplamo/
+      simplamo.client.ts     # shared HTTP client (axios instance)
+      simplamo.module.ts
+
+frontend/
+  src/
+    app/
+      chat/page.tsx
+      dashboard/page.tsx
+    components/
+      goals/ metrics/ actions/
+```
+
+## Key Principle
+**LLM không biết dữ liệu Simplamo — Tool Calling là cầu nối duy nhất.**
+Mọi data (danh sách goals, giá trị metric, action items) đều phải được
+lấy qua tool call, không bao giờ để LLM tự bịa số liệu.
+
+## Conventions
+- TypeScript strict, no `any`
+- `async/await` only, no `.then()`
+- No business logic in controllers
+- Tool description viết cho LLM đọc, không phải cho người
+- Trả lời user bằng tiếng Việt

@@ -1,0 +1,123 @@
+---
+description: NestJS patterns — controllers, services, SSE streaming, modules
+globs: backend/src/**/*.ts
+alwaysApply: false
+---
+
+# NestJS Backend Rules
+
+## App Module wiring
+```ts
+// app.module.ts
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    SimplamoModule,       // global — exports SimplamoClient
+    GoalModule,
+    MetricsModule,
+    ActionModule,
+    OrchestratorModule,
+    ChatModule,
+  ],
+})
+export class AppModule {}
+```
+
+## Chat Controller — SSE Streaming
+```ts
+// chat/chat.controller.ts
+import { Controller, Post, Body, Res } from '@nestjs/common'
+import { Response } from 'express'
+import { ChatService } from './chat.service'
+
+@Controller('api')
+export class ChatController {
+  constructor(private readonly chatService: ChatService) {}
+
+  @Post('chat')
+  async chat(
+    @Body() body: { message: string },
+    @Res() res: Response,
+  ) {
+    // Set SSE headers manually — tương thích assistant-ui
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders()
+
+    try {
+      for await (const chunk of this.chatService.stream(body.message)) {
+        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`)
+      }
+    } finally {
+      res.write('data: [DONE]\n\n')
+      res.end()
+    }
+  }
+}
+```
+
+## Chat Service — Orchestrator wiring
+```ts
+// chat/chat.service.ts
+@Injectable()
+export class ChatService {
+  constructor(private readonly orchestrator: OrchestratorService) {}
+
+  async *stream(message: string): AsyncGenerator<string> {
+    yield* this.orchestrator.stream(message)
+  }
+}
+```
+
+## Orchestrator Service — routes đến đúng agent
+```ts
+// agents/orchestrator/orchestrator.agent.ts
+@Injectable()
+export class OrchestratorService {
+  constructor(
+    private readonly goalAgent: GoalAgentService,
+    private readonly metricsAgent: MetricsAgentService,
+    private readonly actionAgent: ActionAgentService,
+  ) {}
+
+  async *stream(message: string): AsyncGenerator<string> {
+    const intent = await this.classifyIntent(message)
+
+    switch (intent) {
+      case 'goal':    yield* this.goalAgent.stream(message); break
+      case 'metrics': yield* this.metricsAgent.stream(message); break
+      case 'action':  yield* this.actionAgent.stream(message); break
+      default:        yield 'Bạn muốn hỏi về mục tiêu, chỉ số hay công việc?'
+    }
+  }
+
+  private async classifyIntent(message: string): Promise<string> {
+    // Dùng LLM nhẹ để classify — không cần full agent loop
+    const llm = new ChatOpenAI({ model: 'gpt-4o-mini', temperature: 0 })
+    const result = await llm.invoke([
+      new SystemMessage('Classify intent as exactly one word: goal, metrics, action, or general'),
+      new HumanMessage(message),
+    ])
+    const intent = result.content.toString().trim().toLowerCase()
+    return ['goal', 'metrics', 'action'].includes(intent) ? intent : 'general'
+  }
+}
+```
+
+## main.ts
+```ts
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule)
+  app.enableCors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000' })
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }))
+  await app.listen(process.env.PORT || 4000)
+}
+```
+
+## Rules
+- Orchestrator classify intent bằng gpt-4o-mini (nhanh, rẻ) — không dùng GPT-4o
+- Specialist agents dùng gpt-4o (chất lượng cao)
+- Controller không chứa logic — chỉ nhận request, stream response
+- Mỗi agent là 1 NestJS `@Injectable()` service riêng
+- SimplamoModule là `@Global()` — không cần import lại trong từng module

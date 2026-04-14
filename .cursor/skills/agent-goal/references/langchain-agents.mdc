@@ -1,0 +1,230 @@
+---
+description: LangChain.js agent + tool patterns, wiring SimplamoClient
+globs: backend/src/agents/**/*.ts
+alwaysApply: false
+---
+
+# LangChain.js Agent + Tool Rules
+
+## Tool Definition Pattern
+Tool = wrapper mỏng của SimplamoClient. Description viết cho LLM:
+
+```ts
+import { tool } from '@langchain/core/tools'
+import { z } from 'zod'
+import { SimplamoClient } from '../../simplamo/simplamo.client'
+
+// Factory function nhận SimplamoClient làm dependency
+export function createGoalTools(client: SimplamoClient) {
+  const listGoals = tool(
+    async ({ teamId, quarter }) => {
+      try {
+        const data = await client.listGoals({ teamId, quarter })
+        const trimmed = data.goals?.slice(0, 20).map((g: any) => ({
+          id: g.id, title: g.title, progress: g.progress,
+          status: g.status, deadline: g.deadline,
+        }))
+        return JSON.stringify({ success: true, total: data.total, goals: trimmed })
+      } catch (err: any) {
+        return JSON.stringify({ success: false, error: err.message })
+      }
+    },
+    {
+      name: 'listGoals',
+      description: `Use to get a list of goals/rocks from Simplamo.
+        Call when user asks about their goals, OKRs, rocks, or progress overview.
+        Returns list with id, title, progress%, status, deadline.`,
+      schema: z.object({
+        teamId: z.string().optional().describe('Team ID to filter, omit for all teams'),
+        quarter: z.string().optional().describe('Quarter filter e.g. "Q4-2025"'),
+      }),
+    }
+  )
+
+  const getGoalDetail = tool(
+    async ({ goalId }) => {
+      try {
+        const data = await client.getGoalDetail(goalId)
+        return JSON.stringify({
+          success: true,
+          goal: { id: data.id, title: data.title, smartGoal: data.description,
+                  progress: data.progress, deadline: data.deadline, status: data.status }
+        })
+      } catch (err: any) {
+        return JSON.stringify({ success: false, error: err.message })
+      }
+    },
+    {
+      name: 'getGoalDetail',
+      description: `Use to get detailed info about a specific goal.
+        Requires goalId. Call when user asks about a specific goal's details or progress.`,
+      schema: z.object({
+        goalId: z.string().describe('The Simplamo goal ID'),
+      }),
+    }
+  )
+
+  const updateGoalStatus = tool(
+    async ({ goalId, status }) => {
+      try {
+        await client.updateGoalStatus(goalId, status)
+        return JSON.stringify({ success: true, message: `Đã cập nhật trạng thái goal thành "${status}"` })
+      } catch (err: any) {
+        return JSON.stringify({ success: false, error: err.message })
+      }
+    },
+    {
+      name: 'updateGoalStatus',
+      description: `Use to update the status of a goal.
+        Valid statuses: "active", "completed", "abandoned".
+        Always confirm with user before calling this tool.`,
+      schema: z.object({
+        goalId: z.string().describe('The Simplamo goal ID'),
+        status: z.enum(['active', 'completed', 'abandoned']),
+      }),
+    }
+  )
+
+  return [listGoals, getGoalDetail, updateGoalStatus]
+}
+```
+
+## Agent Definition Pattern — Token-Level Streaming
+```ts
+// backend/src/agents/goal/goal.agent.ts
+import { Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import { createReactAgent } from '@langchain/langgraph/prebuilt'
+import { ChatOpenAI } from '@langchain/openai'
+import { HumanMessage } from '@langchain/core/messages'
+import { SimplamoClient } from '../../simplamo/simplamo.client'
+import { createGoalTools } from './goal.tools'
+import { GOAL_AGENT_PROMPT } from './goal.prompts'
+
+@Injectable()
+export class GoalAgentService {
+  private agent: ReturnType<typeof createReactAgent>
+
+  constructor(
+    private readonly simplamo: SimplamoClient,
+    private readonly config: ConfigService,
+  ) {
+    const llm = new ChatOpenAI({
+      model: 'gpt-4o',
+      temperature: 0,
+    })
+    this.agent = createReactAgent({
+      llm,
+      tools: createGoalTools(simplamo, config),
+      messageModifier: GOAL_AGENT_PROMPT,
+    })
+  }
+
+  // streamEvents v2 — yields individual tokens instead of full messages
+  async *stream(message: string): AsyncGenerator<string> {
+    const eventStream = this.agent.streamEvents(
+      { messages: [new HumanMessage(message)] },
+      { version: 'v2' },
+    )
+    for await (const event of eventStream) {
+      if (
+        event.event === 'on_chat_model_stream' &&
+        event.data?.chunk?.content
+      ) {
+        const token = event.data.chunk.content
+        if (typeof token === 'string') {
+          yield token
+        }
+      }
+    }
+  }
+}
+```
+
+## Metrics Tools (key logic)
+```ts
+// Ngoài CRUD — Metrics Agent cần thêm off-track detection
+const getOffTrackMetrics = tool(
+  async ({ teamId }) => {
+    try {
+      const data = await client.listMetrics({ teamId })
+      const offTrack = data.metrics
+        ?.filter((m: any) => {
+          const latest = m.values?.at(-1)?.value
+          return latest !== undefined && latest < m.target * 0.8
+        })
+        .map((m: any) => ({
+          id: m.id, name: m.name,
+          actual: m.values?.at(-1)?.value,
+          target: m.target, unit: m.unit,
+          gap: `${Math.round((m.values?.at(-1)?.value / m.target) * 100)}%`,
+        }))
+      return JSON.stringify({ success: true, offTrack, count: offTrack?.length })
+    } catch (err: any) {
+      return JSON.stringify({ success: false, error: err.message })
+    }
+  },
+  {
+    name: 'getOffTrackMetrics',
+    description: `Use when user asks which metrics/KPIs are not meeting targets.
+      Returns metrics where actual value is less than 80% of target.`,
+    schema: z.object({
+      teamId: z.string().optional(),
+    }),
+  }
+)
+```
+
+## Action Tools (natural date parsing)
+```ts
+// parseNaturalDate phải là tool riêng — Orchestrator gọi trước khi createAction
+const parseNaturalDate = tool(
+  async ({ text }) => {
+    // Dùng LLM để parse — không hardcode rule
+    // Tool này không gọi Simplamo, dùng LLM reasoning
+    const today = new Date().toISOString().split('T')[0]
+    return JSON.stringify({
+      success: true,
+      isoDate: text, // LLM sẽ tự fill khi được prompt đúng
+      hint: `Today is ${today}. Parse "${text}" to ISO date.`
+    })
+  },
+  {
+    name: 'parseNaturalDate',
+    description: `Convert natural language date expressions in Vietnamese to ISO 8601 date.
+      Examples: "thứ 6" → nearest Friday, "cuối tháng" → last day of current month,
+      "tuần sau" → next Monday, "30/12" → 2025-12-30.
+      Always call this before createAction when dueDate is in natural language.`,
+    schema: z.object({
+      text: z.string().describe('Natural language date expression in Vietnamese'),
+    }),
+  }
+)
+```
+
+## Orchestrator Routing
+```ts
+// orchestrator.tools.ts
+const routeToAgent = tool(
+  async ({ intent, message }) => {
+    // Không call Simplamo — chỉ return routing decision
+    return JSON.stringify({ intent, message, routed: true })
+  },
+  {
+    name: 'routeToAgent',
+    description: `Route user message to the correct specialist agent.
+      Call after classifyIntent. intent must be one of: goal, metrics, action, general.`,
+    schema: z.object({
+      intent: z.enum(['goal', 'metrics', 'action', 'general']),
+      message: z.string().describe('Original user message to forward'),
+    }),
+  }
+)
+```
+
+## Rules
+- Tools là factory functions nhận `SimplamoClient` — không dùng singleton static
+- Mỗi tool làm đúng 1 việc, không gộp listGoals + getDetail vào 1 tool
+- Luôn trim response trước khi trả về — không dump raw Simplamo JSON
+- Tool execute không bao giờ throw — catch và return `{ success: false, error }`
+- `verbose: true` trong agent khi dev để thấy reasoning trace

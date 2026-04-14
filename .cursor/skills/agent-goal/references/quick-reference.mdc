@@ -1,0 +1,110 @@
+---
+description: Quick reference — cài đặt, env vars, thứ tự build, câu test chuẩn
+globs:
+alwaysApply: true
+---
+
+# Quick Reference
+
+## Environment Variables
+```bash
+# backend/.env
+SIMPLAMO_API_TOKEN=your_token_here
+SIMPLAMO_TEAM_ID=60fd7f693e81570057440b4f
+SIMPLAMO_SESSION_ID=68bfd79c1f6d94001b24c070
+OPENAI_API_KEY=sk-...
+FRONTEND_URL=http://localhost:3000
+PORT=4000
+
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:4000
+```
+
+## Install Commands
+```bash
+# Backend
+nest new backend && cd backend
+npm install @nestjs/config axios
+npm install langchain @langchain/openai @langchain/core
+npm install class-validator class-transformer zod
+
+# Frontend
+npx create-next-app@latest frontend --typescript --tailwind --app --src-dir
+cd frontend
+npm install @assistant-ui/react
+npx shadcn@latest init
+npx shadcn@latest add card badge button progress
+```
+
+## Thứ Tự Build (5 ngày theo brief)
+
+### Day 1 — Simplamo Client + Tool đầu tiên
+```
+1. backend/src/simplamo/simplamo.client.ts   ← axios instance + all methods
+2. backend/src/simplamo/simplamo.module.ts
+3. backend/src/agents/goal/goal.tools.ts     ← chỉ listGoals() trước
+4. Test thủ công: gọi listGoals() trong main(), xem JSON trả về
+```
+
+### Day 2 — Goal Agent
+```
+5. backend/src/agents/goal/goal.prompts.ts
+6. backend/src/agents/goal/goal.agent.ts     ← createReactAgent với 3 tools
+7. backend/src/chat/chat.controller.ts       ← POST /api/chat SSE
+8. backend/src/chat/chat.service.ts
+9. Test với curl, quan sát reasoning trace (verbose: true)
+```
+
+### Day 3 — Metrics + Action Agent
+```
+10. backend/src/agents/metrics/metrics.tools.ts  ← listMetrics, getMetricValues, getOffTrackMetrics, getTeamScorecard
+11. backend/src/agents/metrics/metrics.agent.ts
+12. backend/src/agents/action/action.tools.ts    ← listActions, createAction, updateActionStatus, parseNaturalDate
+13. backend/src/agents/action/action.agent.ts
+```
+
+### Day 4 — Orchestrator + Frontend
+```
+14. backend/src/agents/orchestrator/orchestrator.agent.ts  ← classifyIntent (gpt-4o-mini) + routing
+15. frontend/src/app/chat/page.tsx                         ← assistant-ui chat
+16. frontend/src/app/dashboard/page.tsx                    ← goal cards + metrics
+```
+
+### Day 5 — Polish + Demo
+```
+17. Error handling edge cases
+18. Test 13 câu chuẩn
+19. Demo 15 phút
+```
+
+## 13 Câu Test Chuẩn
+```
+Goal Agent:
+1. "Danh sách Rock/mục tiêu hiện tại của team?"
+2. "Tiến độ mục tiêu [tên] như thế nào?"
+3. "Goal nào đang dưới 50% mà gần deadline?"
+4. "Đánh dấu mục tiêu [X] là hoàn thành"
+
+Metrics Agent:
+5. "Chỉ số nào đang không đạt mục tiêu?"
+6. "Scorecard tuần này của team ra sao?"
+7. "Xu hướng doanh thu 4 tuần gần nhất?"
+8. "KPI nào tệ nhất tháng này?"
+
+Action Agent:
+9. "Tôi cần làm gì tuần này?"
+10. "Tạo việc: gặp khách hàng ABC, hạn thứ 6"
+11. "Đánh dấu xong việc [X]"
+12. "Tạo 3 action: gửi báo cáo cuối tháng, họp team thứ 2, review KPI tuần sau"
+
+Orchestrator:
+13. "Tổng quan: mục tiêu, chỉ số và việc cần làm hôm nay"
+```
+
+## Gotchas Quan Trọng
+1. **Simplamo token**: Header phải là `Authorization: Bearer <token>` — không phải `X-API-Key`
+2. **Data trimming**: Response Simplamo có thể rất lớn — luôn slice/map trước khi cho LLM
+3. **Orchestrator dùng gpt-4o-mini**: classify intent không cần GPT-4o — tiết kiệm cost
+4. **SSE + CORS**: Phải `res.flushHeaders()` ngay sau set headers, trước khi stream
+5. **Tool factory**: Tools nhận `SimplamoClient` qua closure — không dùng global singleton
+6. **verbose: true**: Bật khi dev để thấy agent loop, tắt khi production
