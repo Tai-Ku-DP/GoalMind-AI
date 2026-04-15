@@ -19,7 +19,15 @@ export class ChatController {
 
     try {
       for await (const chunk of this.chatService.stream(body.message)) {
-        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        if (chunk.startsWith('\x00TOOL_START:') && chunk.endsWith('\x00')) {
+          const tool = chunk.slice(12, -1);
+          res.write(`data: ${JSON.stringify({ type: 'tool_start', tool })}\n\n`);
+        } else if (chunk.startsWith('\x00TOOL_END:') && chunk.endsWith('\x00')) {
+          const tool = chunk.slice(10, -1);
+          res.write(`data: ${JSON.stringify({ type: 'tool_end', tool })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        }
       }
     } finally {
       res.write('data: [DONE]\n\n');

@@ -28,7 +28,11 @@ export class MetricsAgentService {
       { version: 'v2' },
     );
     for await (const event of eventStream) {
-      if (
+      if (event.event === 'on_tool_start') {
+        yield `\x00TOOL_START:${event.name}\x00`;
+      } else if (event.event === 'on_tool_end') {
+        yield `\x00TOOL_END:${event.name}\x00`;
+      } else if (
         event.event === 'on_chat_model_stream' &&
         event.data?.chunk?.content
       ) {

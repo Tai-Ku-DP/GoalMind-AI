@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { SimplamoClient } from '../../simplamo/simplamo.client';
 import { ConfigService } from '@nestjs/config';
 import { computedDeadline } from '../tools';
+import { IRockStatusType } from './types';
 
 export function createGoalTools(client: SimplamoClient, config: ConfigService) {
   const defaultTeamId = config.get<string>('SIMPLAMO_TEAM_ID', '');
@@ -11,6 +11,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
 
   const listGoals = tool(
     async ({ teamId, sessionId }) => {
+      console.log('[TOOL] listGoals called', { teamId, sessionId });
       try {
         const rocks = await client.listRocks({
           teamId: teamId || defaultTeamId,
@@ -24,8 +25,43 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           year: 'numeric',
         });
 
-        const trimmed = list.slice(0, 20).map((r: Record<string, unknown>) => {
-          const deadline = computedDeadline(r?.dueDate as string);
+        const trimmed = list.slice(0, 20).map((r) => {
+          const deadline = computedDeadline(r.dueDate);
+
+          const milestones = Array.isArray(r.milestones)
+            ? r.milestones.map((m) => {
+                const mDeadline = computedDeadline(m.dueDate ?? '');
+                const percentDone =
+                  m.currentPercent != null
+                    ? Math.round(m.currentPercent * 100)
+                    : 0;
+                const hasRange =
+                  m.fromValue != null &&
+                  m.toValue != null &&
+                  m.toValue !== m.fromValue;
+                const currentValue = hasRange
+                  ? Math.round(
+                      m.fromValue! +
+                        (m.toValue! - m.fromValue!) * (m.currentPercent ?? 0),
+                    )
+                  : null;
+                return {
+                  title: m.title,
+                  status: m.status,
+                  deadline: mDeadline.dueDateFormatted,
+                  overdueDays: mDeadline.isOverdue
+                    ? Math.abs(mDeadline.daysRemaining)
+                    : mDeadline.daysRemaining,
+                  isOverdue: mDeadline.isOverdue,
+                  percentDone,
+                  currentValue,
+                  fromValue: m.fromValue ?? null,
+                  toValue: m.toValue ?? null,
+                  assignee: m.assignee?.fullName ?? null,
+                };
+              })
+            : [];
+
           return {
             id: r._id,
             title: r.title,
@@ -35,12 +71,15 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
             daysRemaining: deadline.daysRemaining,
             isOverdue: deadline.isOverdue,
             rockType: r.rockType,
-            owner: (r.rockOwner as Record<string, unknown>)?.fullName,
+            owner: r.rockOwner?.fullName,
             doneMilestones: r.doneMilestones,
             totalMilestones: r.totalMilestones,
             sessionName: r.sessionName,
+            milestones,
           };
         });
+
+        console.log('trimmed', trimmed);
         return JSON.stringify({
           success: true,
           today,
@@ -77,12 +116,13 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
 
   const getGoalDetail = tool(
     async ({ rockId }) => {
+      console.log('[TOOL] getGoalDetail called', { rockId });
       try {
         const data = await client.getRockDetail(rockId);
         const deadline = computedDeadline(data.dueDate);
         const milestones = Array.isArray(data.milestones)
-          ? (data.milestones as Record<string, unknown>[]).map((m) => {
-              const mDeadline = computedDeadline(m.dueDate);
+          ? data.milestones.map((m) => {
+              const mDeadline = computedDeadline(m.dueDate ?? '');
               return {
                 id: m._id,
                 title: m.title,
@@ -94,7 +134,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
                 currentPercent: m.currentPercent,
                 fromValue: m.fromValue,
                 toValue: m.toValue,
-                assignee: (m.assignee as Record<string, unknown>)?.fullName,
+                assignee: m.assignee?.fullName,
               };
             })
           : [];
@@ -103,6 +143,10 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           month: '2-digit',
           year: 'numeric',
         });
+        const daysOverdue = deadline.isOverdue
+          ? Math.abs(deadline.daysRemaining)
+          : 0;
+
         return JSON.stringify({
           success: true,
           today,
@@ -119,6 +163,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
             deadline: deadline.dueDateFormatted,
             daysRemaining: deadline.daysRemaining,
             isOverdue: deadline.isOverdue,
+            daysOverdue,
             startDate: data.startDate,
             rockType: data.rockType,
             owner: data.rockOwner?.fullName,
@@ -129,13 +174,13 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
               ? {
                   id: data.parentRock._id,
                   title: data.parentRock.title,
-                  percentDone: data.parentRock.percentDone,
                 }
               : null,
             sessionName: data.sessionName,
           },
         });
       } catch (err: unknown) {
+        console.log('getGoalDetail error', err);
         const error = err as {
           response?: { status?: number };
           message?: string;
@@ -159,8 +204,11 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
     },
     {
       name: 'getGoalDetail',
-      description: `Use to get detailed info about a specific rock/goal including milestones.
-        Requires rockId (_id from listGoals). Returns pre-computed deadline info with daysRemaining and isOverdue.`,
+      description: `Use to get detailed info about a specific rock/goal.
+        MUST call this when user asks about: milestones, milestone progress, stalled milestones,
+        root cause analysis, deadline risk, corrective actions, full description, or any deep-dive on a single rock.
+        listGoals only returns a summary — this tool returns the full milestone list, description, startDate, and parentRock.
+        Requires rockId (_id from listGoals). Call once per rock that needs analysis.`,
       schema: z.object({
         rockId: z.string().describe('The Simplamo rock _id'),
       }),
@@ -169,8 +217,12 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
 
   const updateGoalStatus = tool(
     async ({ rockId, status }) => {
+      console.log('[TOOL] updateGoalStatus called', { rockId, status });
       try {
-        await client.updateRockStatus(rockId, status);
+        await client.updateRockStatus({
+          rockId,
+          status: status as IRockStatusType,
+        });
         const statusMap: Record<string, string> = {
           ON_TRACK: 'Đúng tiến độ',
           OFF_TRACK: 'Trệch tiến độ',

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { createAgent, ReactAgent } from 'langchain';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { SimplamoClient } from '../../simplamo/simplamo.client';
@@ -10,17 +10,18 @@ import { ACTION_AGENT_PROMPT } from './action.prompts';
 
 @Injectable()
 export class ActionAgentService {
-  private agent: ReturnType<typeof createReactAgent>;
+  private agent: ReactAgent;
 
-  constructor(private readonly simplamo: SimplamoClient) {
-    const llm = new ChatOpenAI({
+  constructor(simplamo: SimplamoClient) {
+    const model = new ChatOpenAI({
       model: 'gpt-4o',
       temperature: 0,
     });
-    this.agent = createReactAgent({
-      llm,
+
+    this.agent = createAgent({
+      model,
       tools: createActionTools(simplamo),
-      messageModifier: ACTION_AGENT_PROMPT,
+      systemPrompt: ACTION_AGENT_PROMPT,
     });
   }
 
@@ -30,7 +31,11 @@ export class ActionAgentService {
       { version: 'v2' },
     );
     for await (const event of eventStream) {
-      if (
+      if (event.event === 'on_tool_start') {
+        yield `\x00TOOL_START:${event.name}\x00`;
+      } else if (event.event === 'on_tool_end') {
+        yield `\x00TOOL_END:${event.name}\x00`;
+      } else if (
         event.event === 'on_chat_model_stream' &&
         event.data?.chunk?.content
       ) {

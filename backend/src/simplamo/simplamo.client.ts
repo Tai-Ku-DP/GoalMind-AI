@@ -1,9 +1,15 @@
 import axios, { AxiosInstance } from 'axios';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  IParamsListRocks,
+  IPramsUpdateRockStatus,
+  ISimplamoClient,
+} from './types';
+import { IRock } from 'src/agents/goal/types';
 
 @Injectable()
-export class SimplamoClient {
+export class SimplamoClient implements ISimplamoClient {
   private readonly http: AxiosInstance;
 
   constructor(private config: ConfigService) {
@@ -20,32 +26,26 @@ export class SimplamoClient {
   }
 
   // ── Rocks (Goals) ──
-
-  async listRocks(params: {
-    teamId: string;
-    sessionId: string;
-    rock?: string;
-    pic?: string;
-    rangeStart?: string;
-    rangeEnd?: string;
-  }) {
-    const { data } = await this.http.get('/eos-core/rocks', { params });
-    console.log(data);
-    return data;
-  }
-
-  async getRockDetail(rockId: string) {
-    const { data } = await this.http.get(`/eos-core/rocks/${rockId}`);
-    return data;
-  }
-
-  async updateRockStatus(
-    rockId: string,
-    status: 'ON_TRACK' | 'OFF_TRACK' | 'AT_RISK' | 'DONE',
-  ) {
-    const { data } = await this.http.patch(`/eos-core/rocks/${rockId}`, {
-      status,
+  async listRocks(params: IParamsListRocks): Promise<IRock[]> {
+    const { data } = await this.http.get<IRock[]>('/eos-core/rocks', {
+      params,
     });
+
+    return data;
+  }
+
+  async getRockDetail(rockId: string): Promise<IRock> {
+    const { data } = await this.http.get<IRock>(`/eos-core/rocks/${rockId}`);
+    return data;
+  }
+
+  async updateRockStatus(params: IPramsUpdateRockStatus): Promise<IRock> {
+    const { data } = await this.http.patch<IRock>(
+      `/eos-core/rocks/${params.rockId}`,
+      {
+        status: params.status,
+      },
+    );
     return data;
   }
 

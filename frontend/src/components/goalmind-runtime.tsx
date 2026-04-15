@@ -1,11 +1,25 @@
 "use client";
 
-import { useState, type ReactNode, useCallback } from "react";
+import { useState, type ReactNode, useCallback, createContext, useContext } from "react";
 import {
   useExternalStoreRuntime,
   AssistantRuntimeProvider,
 } from "@assistant-ui/react";
 import type { ThreadMessageLike, AppendMessage } from "@assistant-ui/react";
+
+// ─── Tool Progress Context ────────────────────────────────────────────────────
+
+interface ToolProgressContextValue {
+  activeTool: string | null;
+}
+
+const ToolProgressContext = createContext<ToolProgressContextValue>({
+  activeTool: null,
+});
+
+export function useToolProgress() {
+  return useContext(ToolProgressContext);
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -24,6 +38,7 @@ export function GoalMindRuntimeProvider({
 }: Readonly<{ children: ReactNode }>) {
   const [isRunning, setIsRunning] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
 
   const onNew = useCallback(async (message: AppendMessage) => {
     const textPart = message.content.find((c) => c.type === "text");
@@ -63,16 +78,26 @@ export function GoalMindRuntimeProvider({
           if (payload === "[DONE]") continue;
 
           try {
-            const parsed = JSON.parse(payload) as { content: string };
-            assistantContent += parsed.content;
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                role: "assistant",
-                content: assistantContent,
-              };
-              return updated;
-            });
+            const parsed = JSON.parse(payload) as {
+              type?: string;
+              tool?: string;
+              content?: string;
+            };
+            if (parsed.type === "tool_start" && parsed.tool) {
+              setActiveTool(parsed.tool);
+            } else if (parsed.type === "tool_end") {
+              setActiveTool(null);
+            } else if (parsed.content) {
+              assistantContent += parsed.content;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: assistantContent,
+                };
+                return updated;
+              });
+            }
           } catch {
             // skip malformed SSE chunks
           }
@@ -90,6 +115,7 @@ export function GoalMindRuntimeProvider({
       ]);
     } finally {
       setIsRunning(false);
+      setActiveTool(null);
     }
   }, []);
 
@@ -101,8 +127,10 @@ export function GoalMindRuntimeProvider({
   });
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      {children}
-    </AssistantRuntimeProvider>
+    <ToolProgressContext.Provider value={{ activeTool }}>
+      <AssistantRuntimeProvider runtime={runtime}>
+        {children}
+      </AssistantRuntimeProvider>
+    </ToolProgressContext.Provider>
   );
 }

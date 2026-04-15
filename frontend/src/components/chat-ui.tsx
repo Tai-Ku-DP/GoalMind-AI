@@ -4,7 +4,118 @@ import {
   ThreadPrimitive,
   MessagePrimitive,
   ComposerPrimitive,
+  useMessage,
 } from "@assistant-ui/react";
+import {
+  GoalCardList,
+  GoalListView,
+  parseGoalsFromText,
+} from "./GoalCard";
+import { useToolProgress } from "./goalmind-runtime";
+
+// ─── Tool label map ───────────────────────────────────────────────────────────
+
+const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
+  listGoals:        { label: "Đang lấy danh sách mục tiêu",   icon: "🎯" },
+  getGoalDetail:    { label: "Đang phân tích chi tiết goal",   icon: "🔍" },
+  updateGoalStatus: { label: "Đang cập nhật trạng thái goal",  icon: "✏️" },
+  listMetrics:      { label: "Đang lấy danh sách chỉ số",      icon: "📊" },
+  getMetricValues:  { label: "Đang đọc số liệu chỉ số",        icon: "📈" },
+  getOffTrackMetrics: { label: "Đang tìm chỉ số lệch mục tiêu", icon: "⚠️" },
+  getTeamScorecard: { label: "Đang tải scorecard nhóm",        icon: "🏆" },
+  listActions:      { label: "Đang lấy danh sách công việc",   icon: "✅" },
+  createAction:     { label: "Đang tạo công việc mới",         icon: "➕" },
+  updateActionStatus: { label: "Đang cập nhật công việc",      icon: "🔄" },
+  parseNaturalDate: { label: "Đang xử lý ngày tháng",          icon: "📅" },
+};
+
+// ─── Tool progress indicator (like Claude's "Searching...") ──────────────────
+
+function ToolProgressIndicator({ tool }: { tool: string | null }) {
+  const info = tool ? TOOL_LABELS[tool] : null;
+  const icon = info?.icon ?? "⚙️";
+  const label = info?.label ?? (tool ? `Đang dùng ${tool}` : "Đang xử lý");
+
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-2.5 dark:border-blue-900 dark:bg-blue-950/40">
+      <span className="text-base">{icon}</span>
+      <span className="text-sm text-blue-700 dark:text-blue-300">{label}...</span>
+      <span className="ml-auto flex gap-1">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="h-1.5 w-1.5 rounded-full bg-blue-400 dark:bg-blue-500"
+            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+// ─── Skeleton shown while JSON is streaming ───────────────────────────────────
+function GoalSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 py-1 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="h-12 rounded-xl bg-gray-100 dark:bg-gray-800" />
+      ))}
+    </div>
+  );
+}
+
+// ─── Smart AssistantMessage ───────────────────────────────────────────────────
+// Checks if message content is a goal JSON block.
+// If yes → renders GoalCardList. Otherwise → renders normal text.
+
+function AssistantMessageContent() {
+  const message = useMessage();
+  const { activeTool } = useToolProgress();
+
+  const rawText = message.content
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("");
+
+  const isStreaming = message.status?.type === "running";
+  const jsonStarted = rawText.includes("```json");
+  const jsonComplete = /```json[\s\S]*?```/.test(rawText);
+
+  // No text yet + streaming → show which tool is running (like Claude)
+  if (isStreaming && !rawText) {
+    return <ToolProgressIndicator tool={activeTool} />;
+  }
+
+  // JSON block detected but not yet closed → show skeleton instead of raw text
+  if (isStreaming && jsonStarted && !jsonComplete) {
+    return <GoalSkeleton />;
+  }
+
+  // JSON block complete → parse and render cards
+  if (jsonComplete) {
+    const parsed = parseGoalsFromText(rawText);
+    if (parsed) {
+      return (
+        <div className="flex flex-col gap-3">
+          {parsed.type === "goal-list" ? (
+            <GoalListView rocks={parsed.rocks} />
+          ) : (
+            <GoalCardList goals={parsed.goals} />
+          )}
+          {parsed.summary && (
+            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+              {parsed.summary}
+            </p>
+          )}
+        </div>
+      );
+    }
+  }
+
+  // Normal text (no JSON) → render as-is
+  return <MessagePrimitive.Content />;
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
 
 function UserMessage() {
   return (
@@ -19,12 +130,12 @@ function UserMessage() {
 function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="flex justify-start px-4 py-2">
-      <div className="flex max-w-[80%] gap-3">
+      <div className="flex w-full max-w-[80%] gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-sm text-white">
           AI
         </div>
-        <div className="rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100">
-          <MessagePrimitive.Content />
+        <div className="min-w-0 flex-1 rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100">
+          <AssistantMessageContent />
         </div>
       </div>
     </MessagePrimitive.Root>
@@ -43,6 +154,8 @@ function ChatMessage() {
     </>
   );
 }
+
+// ─── Composer ─────────────────────────────────────────────────────────────────
 
 function Composer() {
   return (
@@ -65,6 +178,8 @@ function Composer() {
     </ComposerPrimitive.Root>
   );
 }
+
+// ─── EmptyState ───────────────────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -101,6 +216,8 @@ function EmptyState() {
     </ThreadPrimitive.Empty>
   );
 }
+
+// ─── ChatUI ───────────────────────────────────────────────────────────────────
 
 export function ChatUI() {
   return (
