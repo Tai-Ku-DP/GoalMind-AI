@@ -77,33 +77,59 @@ function AssistantMessageContent() {
     .join("");
 
   const isStreaming = message.status?.type === "running";
-  const jsonStarted = rawText.includes("```json");
+
+  // Locate JSON block boundaries
+  const jsonStartIndex = rawText.indexOf("```json");
+  const jsonStarted = jsonStartIndex !== -1;
   const jsonComplete = /```json[\s\S]*?```/.test(rawText);
 
-  // No text yet + streaming → show which tool is running (like Claude)
+  // Text before the JSON block (shown immediately while JSON is streaming)
+  const preText = jsonStarted ? rawText.slice(0, jsonStartIndex).trim() : "";
+
+  // ① Nothing received yet → tool progress indicator
   if (isStreaming && !rawText) {
     return <ToolProgressIndicator tool={activeTool} />;
   }
 
-  // JSON block detected but not yet closed → show skeleton instead of raw text
+  // ② JSON started but not closed → show pre-text immediately + skeleton below
   if (isStreaming && jsonStarted && !jsonComplete) {
-    return <GoalSkeleton />;
+    return (
+      <div className="flex flex-col gap-3">
+        {preText && (
+          <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+            {preText}
+          </p>
+        )}
+        <GoalSkeleton />
+      </div>
+    );
   }
 
-  // JSON block complete → parse and render cards
+  // ③ JSON complete → parse and render pre-text + cards + post-text
   if (jsonComplete) {
     const parsed = parseGoalsFromText(rawText);
     if (parsed) {
+      // Extract post-JSON text (everything after the closing ```)
+      const jsonBlockMatch = rawText.match(/```json[\s\S]*?```/);
+      const postText = jsonBlockMatch
+        ? rawText.slice(jsonStartIndex + jsonBlockMatch[0].length).trim()
+        : "";
+
       return (
         <div className="flex flex-col gap-3">
+          {preText && (
+            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+              {preText}
+            </p>
+          )}
           {parsed.type === "goal-list" ? (
             <GoalListView rocks={parsed.rocks} />
           ) : (
             <GoalCardList goals={parsed.goals} />
           )}
-          {parsed.summary && (
+          {postText && (
             <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-              {parsed.summary}
+              {postText}
             </p>
           )}
         </div>
@@ -111,7 +137,7 @@ function AssistantMessageContent() {
     }
   }
 
-  // Normal text (no JSON) → render as-is
+  // ④ Pure text response (no JSON) → stream naturally
   return <MessagePrimitive.Content />;
 }
 

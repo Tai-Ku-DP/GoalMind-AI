@@ -25,7 +25,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           year: 'numeric',
         });
 
-        const trimmed = list.slice(0, 20).map((r) => {
+        const trimmed = list.slice(0, 20).map((r, idx) => {
           const deadline = computedDeadline(r.dueDate);
 
           const milestones = Array.isArray(r.milestones)
@@ -63,6 +63,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
             : [];
 
           return {
+            position: idx + 1,
             id: r._id,
             title: r.title,
             status: r.status,
@@ -79,7 +80,6 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           };
         });
 
-        console.log('trimmed', trimmed);
         return JSON.stringify({
           success: true,
           today,
@@ -96,6 +96,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
       description: `Use to get a list of rocks/goals from Simplamo.
         Call when user asks about their goals, OKRs, rocks, or progress overview.
         Returns rocks with pre-computed deadline info:
+        - position: 1-based display order matching the UI list (use this to resolve "rock số N")
         - daysRemaining: positive = days left, negative = days overdue
         - isOverdue: true if deadline has passed
         teamId and sessionId use defaults from env if omitted.`,
