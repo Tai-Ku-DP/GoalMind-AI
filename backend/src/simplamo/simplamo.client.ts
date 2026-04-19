@@ -7,6 +7,11 @@ import {
   ISimplamoClient,
 } from './types';
 import { IRock } from 'src/agents/goal/types';
+import type {
+  IScorecardMeasurable,
+  IMetricCalculationResponse,
+  IMetricCalcPeriod,
+} from 'src/agents/metrics/scorecard.types';
 
 @Injectable()
 export class SimplamoClient implements ISimplamoClient {
@@ -49,7 +54,55 @@ export class SimplamoClient implements ISimplamoClient {
     return data;
   }
 
-  // ── Metrics / Scorecard ──
+  // ── Scorecard / Measurables ──
+
+  /**
+   * GET /score-cards/measurables
+   * Returns measurables with `scores[]` (weekly history) and `goal` for a team.
+   * @param interval  Number of weeks of history (default 13)
+   * @param periodInterval  "weekly" | "monthly" | "quarterly" | "annual"
+   */
+  async getScorecardMeasurables(params: {
+    teamId: string;
+    interval?: number;
+    periodInterval?: string;
+    isArchived?: boolean;
+  }): Promise<IScorecardMeasurable[]> {
+    const { data } = await this.http.get<IScorecardMeasurable[]>(
+      '/eos-core/score-cards/measurables',
+      {
+        params: {
+          teamId: params.teamId ?? '60fd7f693e81570057440b4f',
+          interval: params.interval ?? 13,
+          periodInterval: params.periodInterval ?? 'weekly',
+          isArchived: params.isArchived ?? false,
+        },
+      },
+    );
+
+    console.log('CALL API getScorecardMeasurables');
+
+    if (Array.isArray(data)) return data;
+    return (data as { data: IScorecardMeasurable[] }).data ?? [];
+  }
+
+  /**
+   * POST /score-cards/metric-calculation
+   * Returns rolled-up values (monthly/quarterly/annual) for each measurable.
+   */
+  async getScorecardMetricCalculation(
+    teamId: string,
+    periodInterval: string,
+    payload: IMetricCalcPeriod[],
+  ): Promise<IMetricCalculationResponse> {
+    const { data } = await this.http.post<IMetricCalculationResponse>(
+      '/eos-core/score-cards/metric-calculation',
+      { teamId, periodInterval, payload },
+    );
+    return data;
+  }
+
+  // ── Legacy metric endpoints (kept for backward compat) ──
 
   async listMetrics(params?: { teamId?: string }) {
     const { data } = await this.http.get('/eos-core/metrics', { params });
@@ -64,13 +117,6 @@ export class SimplamoClient implements ISimplamoClient {
       `/eos-core/metrics/${metricId}/values`,
       { params },
     );
-    return data;
-  }
-
-  async getTeamScorecard(teamId: string) {
-    const { data } = await this.http.get('/eos-core/metrics/scorecard', {
-      params: { teamId },
-    });
     return data;
   }
 

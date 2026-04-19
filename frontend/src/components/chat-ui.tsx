@@ -11,22 +11,25 @@ import {
   GoalListView,
   parseGoalsFromText,
 } from "./GoalCard";
+import { MetricView, parseMetricFromText } from "./MetricCard";
 import { useToolProgress } from "./goalmind-runtime";
 
 // ─── Tool label map ───────────────────────────────────────────────────────────
 
 const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
-  listGoals:        { label: "Đang lấy danh sách mục tiêu",   icon: "🎯" },
-  getGoalDetail:    { label: "Đang phân tích chi tiết goal",   icon: "🔍" },
-  updateGoalStatus: { label: "Đang cập nhật trạng thái goal",  icon: "✏️" },
-  listMetrics:      { label: "Đang lấy danh sách chỉ số",      icon: "📊" },
-  getMetricValues:  { label: "Đang đọc số liệu chỉ số",        icon: "📈" },
-  getOffTrackMetrics: { label: "Đang tìm chỉ số lệch mục tiêu", icon: "⚠️" },
-  getTeamScorecard: { label: "Đang tải scorecard nhóm",        icon: "🏆" },
-  listActions:      { label: "Đang lấy danh sách công việc",   icon: "✅" },
-  createAction:     { label: "Đang tạo công việc mới",         icon: "➕" },
-  updateActionStatus: { label: "Đang cập nhật công việc",      icon: "🔄" },
-  parseNaturalDate: { label: "Đang xử lý ngày tháng",          icon: "📅" },
+  listGoals:                  { label: "Đang lấy danh sách mục tiêu",       icon: "🎯" },
+  getGoalDetail:              { label: "Đang phân tích chi tiết goal",       icon: "🔍" },
+  updateGoalStatus:           { label: "Đang cập nhật trạng thái goal",      icon: "✏️" },
+  getScorecardMetrics:        { label: "Đang tải toàn bộ chỉ số Scorecard",  icon: "📊" },
+  getOffTrackScorecardMetrics:{ label: "Đang tìm chỉ số lệch mục tiêu",     icon: "⚠️" },
+  getScorecardTrend:          { label: "Đang phân tích xu hướng chỉ số",     icon: "📈" },
+  listMetrics:                { label: "Đang lấy danh sách chỉ số",          icon: "📊" },
+  getMetricValues:            { label: "Đang đọc số liệu chỉ số",            icon: "📈" },
+  getTeamScorecard:           { label: "Đang tải scorecard nhóm",            icon: "🏆" },
+  listActions:                { label: "Đang lấy danh sách công việc",       icon: "✅" },
+  createAction:               { label: "Đang tạo công việc mới",             icon: "➕" },
+  updateActionStatus:         { label: "Đang cập nhật công việc",            icon: "🔄" },
+  parseNaturalDate:           { label: "Đang xử lý ngày tháng",              icon: "📅" },
 };
 
 // ─── Tool progress indicator (like Claude's "Searching...") ──────────────────
@@ -105,16 +108,16 @@ function AssistantMessageContent() {
     );
   }
 
-  // ③ JSON complete → parse and render pre-text + cards + post-text
+  // ③ JSON complete → try metric first, then goal, then fallback
   if (jsonComplete) {
-    const parsed = parseGoalsFromText(rawText);
-    if (parsed) {
-      // Extract post-JSON text (everything after the closing ```)
-      const jsonBlockMatch = rawText.match(/```json[\s\S]*?```/);
-      const postText = jsonBlockMatch
-        ? rawText.slice(jsonStartIndex + jsonBlockMatch[0].length).trim()
-        : "";
+    const jsonBlockMatch = rawText.match(/```json[\s\S]*?```/);
+    const postText = jsonBlockMatch
+      ? rawText.slice(jsonStartIndex + jsonBlockMatch[0].length).trim()
+      : "";
 
+    // Try metric schemas first (scorecard-overview, scorecard-offtrack, scorecard-trend)
+    const metricParsed = parseMetricFromText(rawText);
+    if (metricParsed) {
       return (
         <div className="flex flex-col gap-3">
           {preText && (
@@ -122,10 +125,30 @@ function AssistantMessageContent() {
               {preText}
             </p>
           )}
-          {parsed.type === "goal-list" ? (
-            <GoalListView rocks={parsed.rocks} />
+          <MetricView payload={metricParsed} />
+          {postText && (
+            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+              {postText}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    // Try goal schemas (goal-list, goal-detail)
+    const goalParsed = parseGoalsFromText(rawText);
+    if (goalParsed) {
+      return (
+        <div className="flex flex-col gap-3">
+          {preText && (
+            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+              {preText}
+            </p>
+          )}
+          {goalParsed.type === "goal-list" ? (
+            <GoalListView rocks={goalParsed.rocks} />
           ) : (
-            <GoalCardList goals={parsed.goals} />
+            <GoalCardList goals={goalParsed.goals} />
           )}
           {postText && (
             <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">

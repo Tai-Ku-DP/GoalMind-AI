@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
-import { createAgent, ReactAgent } from 'langchain';
+import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { SimplamoClient } from '../../simplamo/simplamo.client';
@@ -10,18 +10,21 @@ import { ACTION_AGENT_PROMPT } from './action.prompts';
 
 @Injectable()
 export class ActionAgentService {
-  private agent: ReactAgent;
+  private agent: ReturnType<typeof createReactAgent>;
 
   constructor(simplamo: SimplamoClient) {
-    const model = new ChatOpenAI({
-      model: 'gpt-4o',
+    const llm = new ChatOpenAI({
+      model: 'gpt-5.3-codex',
       temperature: 0,
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      configuration: { baseURL: process.env.OPENAI_BASE_URL },
+      streamUsage: false,
     });
 
-    this.agent = createAgent({
-      model,
+    this.agent = createReactAgent({
+      llm,
       tools: createActionTools(simplamo),
-      systemPrompt: ACTION_AGENT_PROMPT,
+      messageModifier: ACTION_AGENT_PROMPT,
     });
   }
 

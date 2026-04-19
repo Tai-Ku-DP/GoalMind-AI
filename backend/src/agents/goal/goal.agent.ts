@@ -9,6 +9,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { SimplamoClient } from '../../simplamo/simplamo.client';
 import { createGoalTools } from './goal.tools';
 import { GOAL_AGENT_PROMPT } from './goal.prompts';
+import { ToolCacheService } from '../cache/tool-cache.service';
 
 // Single thread ID — all conversations share one persistent session.
 // Replace with a per-user/session ID if multi-user support is needed.
@@ -21,14 +22,19 @@ export class GoalAgentService {
   constructor(
     private readonly simplamo: SimplamoClient,
     private readonly config: ConfigService,
+    private readonly cache: ToolCacheService,
   ) {
     const llm = new ChatOpenAI({
-      model: 'gpt-4o',
+      model: 'gpt-5.3-codex',
       temperature: 0,
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      configuration: { baseURL: process.env.OPENAI_BASE_URL },
+      streamUsage: false,
+      maxRetries: 0,
     });
     this.agent = createReactAgent({
       llm,
-      tools: createGoalTools(simplamo, config),
+      tools: createGoalTools(simplamo, config, cache),
       messageModifier: GOAL_AGENT_PROMPT,
       checkpointSaver: new MemorySaver(),
     });

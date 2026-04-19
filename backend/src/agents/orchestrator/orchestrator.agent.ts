@@ -50,8 +50,11 @@ export class OrchestratorService {
 
   private async classifyIntent(message: string): Promise<Intent> {
     const llm = new ChatOpenAI({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.3-codex',
       temperature: 0,
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      configuration: { baseURL: process.env.OPENAI_BASE_URL },
+      streamUsage: false,
     });
     const result = await llm.invoke([
       new SystemMessage(

@@ -4,18 +4,30 @@ import { SimplamoClient } from '../../simplamo/simplamo.client';
 import { ConfigService } from '@nestjs/config';
 import { computedDeadline } from '../tools';
 import { IRockStatusType } from './types';
+import { ToolCacheService } from '../cache/tool-cache.service';
 
-export function createGoalTools(client: SimplamoClient, config: ConfigService) {
+export function createGoalTools(
+  client: SimplamoClient,
+  config: ConfigService,
+  cache: ToolCacheService,
+) {
   const defaultTeamId = config.get<string>('SIMPLAMO_TEAM_ID', '');
   const defaultSessionId = config.get<string>('SIMPLAMO_SESSION_ID', '');
 
   const listGoals = tool(
     async ({ teamId, sessionId }) => {
+      const tid = teamId || defaultTeamId;
+      const sid = sessionId || defaultSessionId;
+      const cacheKey = `listGoals:${tid}:${sid}`;
+
+      const cached = cache.get<string>(cacheKey);
+      if (cached) return cached;
+
       console.log('[TOOL] listGoals called', { teamId, sessionId });
       try {
         const rocks = await client.listRocks({
-          teamId: teamId || defaultTeamId,
-          sessionId: sessionId || defaultSessionId,
+          teamId: tid,
+          sessionId: sid,
         });
 
         const list = Array.isArray(rocks) ? rocks : [];
@@ -80,12 +92,14 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           };
         });
 
-        return JSON.stringify({
+        const result = JSON.stringify({
           success: true,
           today,
           total: list.length,
           rocks: trimmed,
         });
+        cache.set(cacheKey, result);
+        return result;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return JSON.stringify({ success: false, error: message });
@@ -117,6 +131,10 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
 
   const getGoalDetail = tool(
     async ({ rockId }) => {
+      const cacheKey = `goalDetail:${rockId}`;
+      const cached = cache.get<string>(cacheKey);
+      if (cached) return cached;
+
       console.log('[TOOL] getGoalDetail called', { rockId });
       try {
         const data = await client.getRockDetail(rockId);
@@ -148,7 +166,7 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           ? Math.abs(deadline.daysRemaining)
           : 0;
 
-        return JSON.stringify({
+        const result = JSON.stringify({
           success: true,
           today,
           rock: {
@@ -180,6 +198,8 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
             sessionName: data.sessionName,
           },
         });
+        cache.set(cacheKey, result);
+        return result;
       } catch (err: unknown) {
         console.log('getGoalDetail error', err);
         const error = err as {
@@ -224,6 +244,10 @@ export function createGoalTools(client: SimplamoClient, config: ConfigService) {
           rockId,
           status: status as IRockStatusType,
         });
+        // Invalidate stale cache after mutation
+        cache.invalidate(`goalDetail:${rockId}`);
+        cache.invalidatePrefix('listGoals:');
+
         const statusMap: Record<string, string> = {
           ON_TRACK: 'Đúng tiến độ',
           OFF_TRACK: 'Trệch tiến độ',

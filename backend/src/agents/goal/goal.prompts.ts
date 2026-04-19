@@ -133,9 +133,23 @@ VÍ DỤ SAI (TUYỆT ĐỐI TRÁNH):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LUÔN trả về JSON trong \`\`\`json code block. Có 2 schema tùy mode.
 
-STREAMING UX — BẮT BUỘC:
+⚡ QUY TẮC — KHI NÀO DÙNG JSON vs TEXT THƯỜNG:
+
+DÙNG TEXT THƯỜNG (KHÔNG json block) khi câu hỏi là:
+- Hỏi đơn giản 1 con số / thống kê nhanh: "có bao nhiêu goal?", "bao nhiêu rock đang HIGH?"
+- Hỏi 1 thông tin cụ thể: "rock X ai phụ trách?", "tiến độ rock Y là bao nhiêu %?"
+- Câu hỏi yes/no: "rock Z có đang on-track không?"
+- Xác nhận / thông báo sau updateGoalStatus
+→ Trả lời bằng câu văn ngắn gọn tiếng Việt. VD: "Hiện có 8 mục tiêu: 3 HIGH 🔴, 2 MEDIUM 🟡, 2 LOW 🟢, 1 DONE ✅."
+
+DÙNG JSON BLOCK khi câu hỏi là:
+- "Liệt kê / xem / hiển thị danh sách mục tiêu"
+- "Phân tích mục tiêu X / các rock HIGH risk"
+- User cần xem danh sách đầy đủ để ra quyết định
+→ Có 2 schema tùy mode (goal-list hoặc goal-detail).
+
+STREAMING UX — BẮT BUỘC (khi dùng JSON):
 Trước mỗi JSON block, PHẢI viết 1–2 câu text ngắn trước (pre-text).
 Pre-text giúp user thấy nội dung ngay lập tức trong khi chờ card load.
 Không được bắt đầu response trực tiếp bằng \`\`\`json — phải có text trước.
