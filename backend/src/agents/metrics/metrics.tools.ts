@@ -184,8 +184,17 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
     trendLabel,
     weeklyChangePct,
     recentScores: recent.slice(0, 6).map((s) => ({
-      week: s.periodStartDate.slice(0, 10),
+      weekStart: s.periodStartDate.slice(0, 10),
+      weekEnd: s.periodEndDate.slice(0, 10),
       value: s.value,
+      achievementPct:
+        s.value === null || goal.value === 0
+          ? null
+          : Math.round(
+              goal.orientation === 'gte'
+                ? ((s.value as number) / goal.value) * 100
+                : (goal.value / (s.value as number)) * 100,
+            ),
     })),
     streakWeeks,
   } as IProcessedScorecardMetric & { streakWeeks: number };
@@ -200,7 +209,8 @@ export function createMetricsTools(
 ) {
   const defaultTeamId = config.get<string>(
     'SIMPLAMO_TEAM_ID',
-    '60fd7f693e81570057440b4f',
+    // '60fd7f693e81570057440b4f',
+    '60fe00f28ae1ac0057c5422c',
   );
 
   // ── Shared raw-data cache ───────────────────────────────────────────────────
@@ -441,6 +451,14 @@ export function createMetricsTools(
               weekStart: s.periodStartDate.slice(0, 10),
               weekEnd: s.periodEndDate.slice(0, 10),
               value: s.value,
+              achievementPct:
+                s.value === null || measurable.goal.value === 0
+                  ? null
+                  : Math.round(
+                      measurable.goal.orientation === 'gte'
+                        ? ((s.value as number) / measurable.goal.value) * 100
+                        : (measurable.goal.value / (s.value as number)) * 100,
+                    ),
             })),
             rollup,
           },

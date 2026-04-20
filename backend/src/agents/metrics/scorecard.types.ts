@@ -89,5 +89,10 @@ export interface IProcessedScorecardMetric {
   trend: TrendDirection;
   trendLabel: string;
   weeklyChangePct: number | null;
-  recentScores: Array<{ week: string; value: number | null }>;
+  recentScores: Array<{
+    weekStart: string;
+    weekEnd: string;
+    value: number | null;
+    achievementPct: number | null;
+  }>;
 }

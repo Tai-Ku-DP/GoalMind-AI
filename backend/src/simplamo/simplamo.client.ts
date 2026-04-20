@@ -68,11 +68,12 @@ export class SimplamoClient implements ISimplamoClient {
     periodInterval?: string;
     isArchived?: boolean;
   }): Promise<IScorecardMeasurable[]> {
+    console.log('params', params);
     const { data } = await this.http.get<IScorecardMeasurable[]>(
       '/eos-core/score-cards/measurables',
       {
         params: {
-          teamId: params.teamId ?? '60fd7f693e81570057440b4f',
+          teamId: params.teamId,
           interval: params.interval ?? 13,
           periodInterval: params.periodInterval ?? 'weekly',
           isArchived: params.isArchived ?? false,

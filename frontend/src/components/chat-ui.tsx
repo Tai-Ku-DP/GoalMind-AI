@@ -6,6 +6,7 @@ import {
   ComposerPrimitive,
   useMessage,
 } from "@assistant-ui/react";
+import ReactMarkdown from "react-markdown";
 import {
   GoalCardList,
   GoalListView,
@@ -13,6 +14,24 @@ import {
 } from "./GoalCard";
 import { MetricView, parseMetricFromText } from "./MetricCard";
 import { useToolProgress } from "./goalmind-runtime";
+
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+// Renders AI text with full markdown support: **bold**, *italic*, lists, etc.
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none
+        prose-p:my-1 prose-p:leading-relaxed
+        prose-strong:font-semibold
+        prose-ul:my-1 prose-ul:pl-4
+        prose-ol:my-1 prose-ol:pl-4
+        prose-li:my-0.5
+        prose-code:rounded prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:text-xs dark:prose-code:bg-gray-800
+        prose-hr:my-2
+        text-gray-800 dark:text-gray-200">
+      <ReactMarkdown>{text}</ReactMarkdown>
+    </div>
+  );
+}
 
 // ─── Tool label map ───────────────────────────────────────────────────────────
 
@@ -99,9 +118,7 @@ function AssistantMessageContent() {
     return (
       <div className="flex flex-col gap-3">
         {preText && (
-          <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-            {preText}
-          </p>
+          <MarkdownContent text={preText} />
         )}
         <GoalSkeleton />
       </div>
@@ -120,17 +137,9 @@ function AssistantMessageContent() {
     if (metricParsed) {
       return (
         <div className="flex flex-col gap-3">
-          {preText && (
-            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-              {preText}
-            </p>
-          )}
+          {preText && <MarkdownContent text={preText} />}
           <MetricView payload={metricParsed} />
-          {postText && (
-            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-              {postText}
-            </p>
-          )}
+          {postText && <MarkdownContent text={postText} />}
         </div>
       );
     }
@@ -140,28 +149,20 @@ function AssistantMessageContent() {
     if (goalParsed) {
       return (
         <div className="flex flex-col gap-3">
-          {preText && (
-            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-              {preText}
-            </p>
-          )}
+          {preText && <MarkdownContent text={preText} />}
           {goalParsed.type === "goal-list" ? (
             <GoalListView rocks={goalParsed.rocks} />
           ) : (
             <GoalCardList goals={goalParsed.goals} />
           )}
-          {postText && (
-            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-              {postText}
-            </p>
-          )}
+          {postText && <MarkdownContent text={postText} />}
         </div>
       );
     }
   }
 
-  // ④ Pure text response (no JSON) → stream naturally
-  return <MessagePrimitive.Content />;
+  // ④ Pure text response (no JSON) → render as markdown
+  return <MarkdownContent text={rawText} />;
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────

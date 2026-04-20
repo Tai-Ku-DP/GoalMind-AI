@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
+  TooltipContent,
+} from "./ui/tooltip";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type OffTrackSeverity = "CRITICAL" | "WARNING" | "ON_TRACK";
@@ -21,7 +28,12 @@ export interface MetricItem {
   // for trend view
   trendLabel?: string;
   avgWeeklyChangePct?: number | null;
-  history?: { week: string; value: number | null }[];
+  history?: {
+    weekStart: string;
+    weekEnd: string;
+    value: number | null;
+    achievementPct?: number | null;
+  }[];
   rollup?: { monthly?: number; quarterly?: number; annual?: number } | null;
 }
 
@@ -88,6 +100,97 @@ const SEV_CONFIG: Record<
     pctColor: "text-green-600",
   },
 };
+
+// ─── History bar chart with hover info ───────────────────────────────────────
+
+function HistoryBars({
+  history,
+  goal,
+  isGte,
+  unit,
+  avgWeeklyChangePct,
+}: {
+  history: NonNullable<MetricItem["history"]>;
+  goal: number;
+  isGte: boolean;
+  unit: string;
+  avgWeeklyChangePct?: number | null;
+}) {
+  const ordered = history.slice().reverse();
+  const max = Math.max(...ordered.map((x) => x.value ?? 0));
+
+  const fmt = (iso: string) => {
+    const [, m, d] = iso.split("-");
+    return `${d}/${m}`;
+  };
+
+  return (
+    <TooltipProvider delayDuration={100}>
+      <div>
+        {/* Bars */}
+        <div className="flex items-end gap-0.5 h-14">
+          {ordered.map((h, i) => {
+            const val = h.value ?? 0;
+            const heightPct = max > 0 ? (val / max) * 100 : 0;
+            const isAboveGoal = isGte ? val >= goal : val <= goal;
+            const tooltipContent = (
+              <div className="flex flex-col gap-1 min-w-[90px]">
+                <span className="text-[10px] text-gray-400 font-medium">
+                  {fmt(h.weekStart)} &ndash; {fmt(h.weekEnd)}
+                </span>
+                <span className="text-[13px] font-bold">
+                  {val.toLocaleString()} {unit}
+                </span>
+                {h.achievementPct != null && (
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      isAboveGoal ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    {h.achievementPct}% mục tiêu
+                  </span>
+                )}
+              </div>
+            );
+
+            return (
+              <TooltipRoot key={i}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="flex-1 rounded-sm cursor-pointer transition-transform hover:scale-105 hover:brightness-110"
+                    style={{
+                      height: `${Math.max(heightPct, 8)}%`,
+                      backgroundColor: isAboveGoal ? "#22c55e" : "#ef4444",
+                      opacity: 0.55 + (i / ordered.length) * 0.45,
+                    }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top">{tooltipContent}</TooltipContent>
+              </TooltipRoot>
+            );
+          })}
+        </div>
+
+        {/* Date range labels */}
+        <div className="flex justify-between px-0.5 mt-1">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+            {fmt(ordered[0].weekStart)}
+          </span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+            {fmt(ordered[ordered.length - 1].weekEnd)}
+          </span>
+        </div>
+
+        {avgWeeklyChangePct != null && (
+          <p className="mt-1 text-[11px] text-gray-400">
+            Trung bình {avgWeeklyChangePct > 0 ? "+" : ""}
+            {avgWeeklyChangePct}%/tuần
+          </p>
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
 
 // ─── Single MetricCard ────────────────────────────────────────────────────────
 
@@ -236,38 +339,15 @@ export function MetricCard({ metric }: { metric: MetricItem }) {
       {metric.history && metric.history.length > 0 && (
         <div className="mt-4">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">
-            Lịch sử 13 tuần
+            Lịch sử {metric.history.length} tuần
           </p>
-          <div className="flex items-end gap-0.5 h-10">
-            {metric.history
-              .slice()
-              .reverse()
-              .map((h, i) => {
-                const max = Math.max(...metric.history!.map((x) => x.value ?? 0));
-                const val = h.value ?? 0;
-                const heightPct = max > 0 ? (val / max) * 100 : 0;
-                const isAboveGoal =
-                  isGte ? val >= goal : val <= goal;
-                return (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-sm transition-all"
-                    style={{
-                      height: `${Math.max(heightPct, 8)}%`,
-                      backgroundColor: isAboveGoal ? "#22c55e" : "#ef4444",
-                      opacity: 0.7 + (i / metric.history!.length) * 0.3,
-                    }}
-                    title={`${h.week}: ${val.toLocaleString()}`}
-                  />
-                );
-              })}
-          </div>
-          {metric.avgWeeklyChangePct !== null && metric.avgWeeklyChangePct !== undefined && (
-            <p className="mt-1 text-[11px] text-gray-400">
-              Trung bình {metric.avgWeeklyChangePct > 0 ? "+" : ""}
-              {metric.avgWeeklyChangePct}%/tuần
-            </p>
-          )}
+          <HistoryBars
+            history={metric.history}
+            goal={goal}
+            isGte={isGte}
+            unit={metric.unit}
+            avgWeeklyChangePct={metric.avgWeeklyChangePct}
+          />
         </div>
       )}
     </div>

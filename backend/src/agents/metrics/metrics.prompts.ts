@@ -148,8 +148,8 @@ Phân tích xu hướng [tên KPI]:
     "trendLabel": "↑ tăng 2 tuần liên tiếp",
     "avgWeeklyChangePct": 8,
     "history": [
-      { "week": "2026-04-13", "value": 249 },
-      { "week": "2026-04-06", "value": 212 }
+      { "weekStart": "2026-04-13", "weekEnd": "2026-04-19", "value": 249, "achievementPct": 78 },
+      { "weekStart": "2026-04-06", "weekEnd": "2026-04-12", "value": 212, "achievementPct": 66 }
     ],
     "rollup": {
       "monthly": 461,
