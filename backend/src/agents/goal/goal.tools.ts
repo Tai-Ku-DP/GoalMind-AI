@@ -118,10 +118,12 @@ export function createGoalTools(
         teamId: z
           .string()
           .optional()
+          .nullable()
           .describe('Team ID to filter, uses default if omitted'),
         sessionId: z
           .string()
           .optional()
+          .nullable()
           .describe(
             'Session ID representing the quarter/period, uses default if omitted',
           ),

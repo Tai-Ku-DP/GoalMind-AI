@@ -6,7 +6,9 @@ import { ToolCacheService } from '../cache/tool-cache.service';
 import type {
   IScorecardMeasurable,
   IScorecardScore,
+  IScorecardGoal,
   IProcessedScorecardMetric,
+  IGoalAdvancedStat,
   OffTrackSeverity,
   TrendDirection,
 } from './scorecard.types';
@@ -28,6 +30,35 @@ function getRecentScores(
         new Date(a.periodStartDate).getTime(),
     )
     .slice(0, take);
+}
+
+/**
+ * Trả về goalAdvanced nếu score nằm trong khoảng thời gian của nó,
+ * ngược lại trả về goal mặc định.
+ * Tương đương getMeasurableGoal() trong Simplamo frontend.
+ */
+function getEffectiveGoal(
+  score: IScorecardScore,
+  mainGoal: IScorecardGoal,
+  goalAdvanced?: IScorecardMeasurable['goalAdvanced'],
+): IScorecardGoal & { isAdvancedGoal: boolean } {
+  if (goalAdvanced?.length) {
+    const adv = goalAdvanced.find((a) => {
+      const scoreStart = new Date(score.periodStartDate).getTime();
+      const scoreEnd = new Date(score.periodEndDate).getTime();
+      const advStart = new Date(a.periodStartDate).getTime();
+      const advEnd = new Date(a.periodEndDate).getTime();
+      return scoreStart >= advStart && scoreEnd <= advEnd;
+    });
+    if (adv) {
+      return {
+        value: adv.value,
+        orientation: adv.orientation,
+        isAdvancedGoal: true,
+      };
+    }
+  }
+  return { ...mainGoal, isAdvancedGoal: false };
 }
 
 /**
@@ -80,14 +111,20 @@ function calcTrend(recent: IScorecardScore[]): {
 
 /**
  * Count how many of the last N weeks are consecutively off-track.
+ * Tự động dùng goalAdvanced nếu score nằm trong khoảng thời gian của nó.
  */
 function countConsecutiveOffTrack(
   recent: IScorecardScore[],
-  goalValue: number,
-  orientation: 'gte' | 'lte',
+  mainGoal: IScorecardGoal,
+  goalAdvanced?: IScorecardMeasurable['goalAdvanced'],
 ): number {
   let count = 0;
   for (const s of recent) {
+    const { value: goalValue, orientation } = getEffectiveGoal(
+      s,
+      mainGoal,
+      goalAdvanced,
+    );
     const v = s.value as number;
     const isOffTrack = orientation === 'gte' ? v < goalValue : v > goalValue;
     if (isOffTrack) count++;
@@ -103,19 +140,91 @@ function countConsecutiveOffTrack(
 function calcSeverity(
   latestValue: number,
   goalValue: number,
-  orientation: 'gte' | 'lte',
+  orientation: IScorecardGoal['orientation'],
   consecutiveOffTrackWeeks: number,
 ): OffTrackSeverity {
   const isOnTrack =
-    orientation === 'gte' ? latestValue >= goalValue : latestValue <= goalValue;
+    orientation === 'lte' ? latestValue <= goalValue : latestValue >= goalValue;
 
   if (isOnTrack) return 'ON_TRACK';
 
   const ratio =
-    orientation === 'gte' ? latestValue / goalValue : goalValue / latestValue; // ratio < 1 means off track
+    orientation === 'lte' ? goalValue / latestValue : latestValue / goalValue;
 
   if (ratio < 0.6 || consecutiveOffTrackWeeks >= 3) return 'CRITICAL';
   return 'WARNING';
+}
+
+/**
+ * Tính tỷ lệ hoàn thành mục tiêu (%) — giống calcGoalRate của Simplamo frontend.
+ */
+function calcGoalRateHelper(
+  actual: number,
+  target: number,
+  orientation: string,
+): number {
+  if (['gt', 'gte', 'equal'].includes(orientation)) {
+    return actual < target
+      ? (actual * 100) / target
+      : 100 + ((actual - target) * 100) / target;
+  }
+  if (['lt', 'lte'].includes(orientation)) {
+    return actual < target
+      ? 100 - (actual * 100) / target
+      : (100 + ((actual - target) * 100) / target) * -1;
+  }
+  return 0;
+}
+
+/**
+ * Tính giá trị còn thiếu để đạt mục tiêu — giống calcRemaining của Simplamo frontend.
+ */
+function calcRemainingHelper(
+  actual: number,
+  target: number,
+  orientation: string,
+): number {
+  switch (orientation) {
+    case 'equal':
+      return Math.max(0, target - actual);
+    case 'gt':
+      return actual > target ? 0 : target - actual + 1;
+    case 'gte':
+      return actual >= target ? 0 : target - actual;
+    case 'lt':
+      return actual < target ? 0 : actual - target + 1;
+    case 'lte':
+      return actual <= target ? 0 : actual - target;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Tính giá trị thực đạt trong khoảng thời gian của một goalAdvanced,
+ * dùng SUM hoặc AVERAGE tuỳ theo cấu hình của chỉ số.
+ */
+function computeActualForPeriod(
+  scores: IScorecardScore[],
+  periodStart: string,
+  periodEnd: string,
+  metricCalculation: 'SUM' | 'AVERAGE',
+): number | null {
+  const advStart = new Date(periodStart).getTime();
+  const advEnd = new Date(periodEnd).getTime();
+
+  const inPeriod = scores.filter((s) => {
+    if (s.value === null) return false;
+    const scoreStart = new Date(s.periodStartDate).getTime();
+    const scoreEnd = new Date(s.periodEndDate).getTime();
+    return scoreStart >= advStart && scoreEnd <= advEnd;
+  });
+
+  if (inPeriod.length === 0) return null;
+
+  const values = inPeriod.map((s) => s.value as number);
+  const sum = values.reduce((a, b) => a + b, 0);
+  return metricCalculation === 'SUM' ? sum : sum / values.length;
 }
 
 /**
@@ -126,34 +235,39 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
   const latest = recent[0]?.value ?? null;
   const goal = m.goal;
 
+  // Lấy effective goal cho tuần mới nhất (có thể là goalAdvanced)
+  const latestEffectiveGoal = recent[0]
+    ? getEffectiveGoal(recent[0], goal, m.goalAdvanced)
+    : { ...goal, isAdvancedGoal: false };
+
   const isOnTrack =
     latest === null
       ? true
-      : goal.orientation === 'gte'
-        ? latest >= goal.value
-        : latest <= goal.value;
+      : latestEffectiveGoal.orientation === 'gte'
+        ? latest >= latestEffectiveGoal.value
+        : latest <= latestEffectiveGoal.value;
 
   const achievementPct =
-    latest === null || goal.value === 0
+    latest === null || latestEffectiveGoal.value === 0
       ? null
       : Math.round(
-          goal.orientation === 'gte'
-            ? (latest / goal.value) * 100
-            : (goal.value / latest) * 100,
+          latestEffectiveGoal.orientation === 'gte'
+            ? (latest / latestEffectiveGoal.value) * 100
+            : (latestEffectiveGoal.value / latest) * 100,
         );
 
   const consecutiveOffTrackWeeks =
     latest === null
       ? 0
-      : countConsecutiveOffTrack(recent, goal.value, goal.orientation);
+      : countConsecutiveOffTrack(recent, goal, m.goalAdvanced);
 
   const offTrackSeverity =
     latest === null
       ? 'ON_TRACK'
       : calcSeverity(
           latest,
-          goal.value,
-          goal.orientation,
+          latestEffectiveGoal.value,
+          latestEffectiveGoal.orientation,
           consecutiveOffTrackWeeks,
         );
 
@@ -168,6 +282,36 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
         )
       : null;
 
+  // Thống kê tổng hợp (overall) cho từng goalAdvanced period
+  const goalAdvancedStats: IGoalAdvancedStat[] =
+    m.goalAdvanced?.map((adv) => {
+      const actual = computeActualForPeriod(
+        m.scores,
+        adv.periodStartDate,
+        adv.periodEndDate,
+        m.metricCalculation,
+      );
+      const target = adv.value;
+      const orientation = adv.orientation;
+      return {
+        periodInterval: adv.periodInterval,
+        from: adv.periodStartDate.slice(0, 10),
+        to: adv.periodEndDate.slice(0, 10),
+        target,
+        orientation,
+        metricCalculation: m.metricCalculation,
+        actual,
+        remaining:
+          actual === null
+            ? null
+            : calcRemainingHelper(actual, target, orientation),
+        rate:
+          actual === null
+            ? null
+            : calcGoalRateHelper(actual, target, orientation),
+      };
+    }) ?? [];
+
   return {
     id: m._id,
     title: m.title.trim(),
@@ -175,6 +319,8 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
     owner: m.owner?.fullName ?? 'N/A',
     goalValue: goal.value,
     goalOrientation: goal.orientation,
+    latestEffectiveGoalValue: latestEffectiveGoal.value,
+    latestIsAdvancedGoal: latestEffectiveGoal.isAdvancedGoal,
     latestValue: latest,
     achievementPct,
     isOnTrack,
@@ -183,21 +329,27 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
     trend: direction,
     trendLabel,
     weeklyChangePct,
-    recentScores: recent.slice(0, 6).map((s) => ({
-      weekStart: s.periodStartDate.slice(0, 10),
-      weekEnd: s.periodEndDate.slice(0, 10),
-      value: s.value,
-      achievementPct:
-        s.value === null || goal.value === 0
-          ? null
-          : Math.round(
-              goal.orientation === 'gte'
-                ? ((s.value as number) / goal.value) * 100
-                : (goal.value / (s.value as number)) * 100,
-            ),
-    })),
     streakWeeks,
-  } as IProcessedScorecardMetric & { streakWeeks: number };
+    recentScores: recent.slice(0, 6).map((s) => {
+      const effGoal = getEffectiveGoal(s, goal, m.goalAdvanced);
+      return {
+        weekStart: s.periodStartDate.slice(0, 10),
+        weekEnd: s.periodEndDate.slice(0, 10),
+        value: s.value,
+        goalValue: effGoal.value,
+        isAdvancedGoal: effGoal.isAdvancedGoal,
+        achievementPct:
+          s.value === null || effGoal.value === 0
+            ? null
+            : Math.round(
+                effGoal.orientation === 'gte'
+                  ? (s.value / effGoal.value) * 100
+                  : (effGoal.value / s.value) * 100,
+              ),
+      };
+    }),
+    goalAdvancedStats,
+  } satisfies IProcessedScorecardMetric;
 }
 
 // ─── Tool factory ──────────────────────────────────────────────────────────────
@@ -278,10 +430,12 @@ export function createMetricsTools(
         teamId: z
           .string()
           .optional()
+          .nullable()
           .describe('Team ID to filter, uses default from env if omitted'),
         interval: z
           .number()
           .optional()
+          .nullable()
           .describe('Number of weeks of history to fetch (default 13)'),
       }),
     },
@@ -348,10 +502,12 @@ export function createMetricsTools(
         teamId: z
           .string()
           .optional()
+          .nullable()
           .describe('Team ID to filter, uses default from env if omitted'),
         severityFilter: z
           .enum(['CRITICAL', 'WARNING'])
           .optional()
+          .nullable()
           .describe('Filter to only CRITICAL or WARNING metrics'),
       }),
     },
@@ -440,6 +596,17 @@ export function createMetricsTools(
               value: processed.goalValue,
               orientation: processed.goalOrientation,
             },
+            latestEffectiveGoalValue: processed.latestEffectiveGoalValue,
+            latestIsAdvancedGoal: processed.latestIsAdvancedGoal,
+            advancedGoals:
+              measurable.goalAdvanced?.map((adv) => ({
+                periodInterval: adv.periodInterval,
+                from: adv.periodStartDate.slice(0, 10),
+                to: adv.periodEndDate.slice(0, 10),
+                value: adv.value,
+                orientation: adv.orientation,
+              })) ?? [],
+            goalAdvancedStats: processed.goalAdvancedStats,
             latestValue: processed.latestValue,
             achievementPct: processed.achievementPct,
             offTrackSeverity: processed.offTrackSeverity,
@@ -447,19 +614,28 @@ export function createMetricsTools(
             trend: processed.trend,
             trendLabel: processed.trendLabel,
             avgWeeklyChangePct: avgWeeklyChange,
-            history: recentFull.map((s) => ({
-              weekStart: s.periodStartDate.slice(0, 10),
-              weekEnd: s.periodEndDate.slice(0, 10),
-              value: s.value,
-              achievementPct:
-                s.value === null || measurable.goal.value === 0
-                  ? null
-                  : Math.round(
-                      measurable.goal.orientation === 'gte'
-                        ? ((s.value as number) / measurable.goal.value) * 100
-                        : (measurable.goal.value / (s.value as number)) * 100,
-                    ),
-            })),
+            history: recentFull.map((s) => {
+              const effGoal = getEffectiveGoal(
+                s,
+                measurable.goal,
+                measurable.goalAdvanced,
+              );
+              return {
+                weekStart: s.periodStartDate.slice(0, 10),
+                weekEnd: s.periodEndDate.slice(0, 10),
+                value: s.value,
+                goalValue: effGoal.value,
+                isAdvancedGoal: effGoal.isAdvancedGoal,
+                achievementPct:
+                  s.value === null || effGoal.value === 0
+                    ? null
+                    : Math.round(
+                        effGoal.orientation === 'gte'
+                          ? (s.value / effGoal.value) * 100
+                          : (effGoal.value / s.value) * 100,
+                      ),
+              };
+            }),
             rollup,
           },
         });
@@ -480,11 +656,13 @@ export function createMetricsTools(
         teamId: z
           .string()
           .optional()
+          .nullable()
           .describe('Team ID to filter, uses default from env if omitted'),
         metricId: z.string().describe('The Simplamo measurable _id'),
         includeRollup: z
           .boolean()
           .optional()
+          .nullable()
           .describe(
             'Include monthly/quarterly/annual rollup values from metric-calculation API',
           ),

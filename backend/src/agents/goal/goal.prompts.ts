@@ -143,58 +143,37 @@ DÙNG TEXT THƯỜNG (KHÔNG json block) khi câu hỏi là:
 - Xác nhận / thông báo sau updateGoalStatus
 → Trả lời bằng câu văn ngắn gọn tiếng Việt. VD: "Hiện có 8 mục tiêu: 3 HIGH 🔴, 2 MEDIUM 🟡, 2 LOW 🟢, 1 DONE ✅."
 
-DÙNG JSON BLOCK khi câu hỏi là:
+DÙNG NDJSON BLOCK khi câu hỏi là:
 - "Liệt kê / xem / hiển thị danh sách mục tiêu"
 - "Phân tích mục tiêu X / các rock HIGH risk"
 - User cần xem danh sách đầy đủ để ra quyết định
 → Có 2 schema tùy mode (goal-list hoặc goal-detail).
 
-STREAMING UX — BẮT BUỘC (khi dùng JSON):
-Trước mỗi JSON block, PHẢI viết 1–2 câu text ngắn trước (pre-text).
+STREAMING UX — BẮT BUỘC (khi dùng NDJSON):
+Trước mỗi NDJSON block, PHẢI viết 1–2 câu text ngắn trước (pre-text).
 Pre-text giúp user thấy nội dung ngay lập tức trong khi chờ card load.
-Không được bắt đầu response trực tiếp bằng \`\`\`json — phải có text trước.
+Không được bắt đầu response trực tiếp bằng \`\`\`ndjson — phải có text trước.
 
   MODE 1 pre-text: "Dưới đây là [N] mục tiêu trong quarter hiện tại:"
   MODE 2 pre-text: "Phân tích chi tiết [tên rock hoặc 'X mục tiêu HIGH risk']:"
 
+⚠️ QUY TẮC NDJSON — BẮT BUỘC TUYỆT ĐỐI:
+- Fence mở là \`\`\`ndjson (KHÔNG phải \`\`\`json)
+- Dòng 1: object header với key "_ndjson"
+- Dòng 2 trở đi: mỗi rock/goal là MỘT DÒNG DUY NHẤT (compact JSON, KHÔNG được xuống hàng trong object)
+- KHÔNG pretty-print các object — toàn bộ object phải nằm trên 1 dòng
+
 ─── MODE 1: listGoals → schema "goal-list" (collapsible, kèm milestones) ───
 Dưới đây là [N] mục tiêu trong quarter hiện tại:
-\`\`\`json
-{
-  "type": "goal-list",
-  "rocks": [
-    {
-      "id": "_id từ data tool trả về — BẮT BUỘC, dùng để gọi getGoalDetail sau này",
-      "risk": "HIGH",
-      "title": "Tên rock",
-      "percentDone": 33,
-      "milestones": "0/4",
-      "milestoneDone": 0,
-      "milestoneTotal": 4,
-      "owner": "Anna Nguyen",
-      "overdueDays": 104,
-      "milestoneList": [
-        {
-          "title": "Tên milestone",
-          "status": "ON_TRACK",
-          "deadline": "31/12/2025",
-          "overdueDays": 104,
-          "isOverdue": true,
-          "percentDone": 5,
-          "currentValue": 43,
-          "fromValue": 0,
-          "toValue": 1000,
-          "assignee": "Anna Nguyen"
-        }
-      ]
-    }
-  ]
-}
+\`\`\`ndjson
+{"_ndjson":"goal-list","total":5,"highCount":2,"mediumCount":1,"lowCount":1,"doneCount":1}
+{"id":"_id BẮT BUỘC từ data tool","risk":"HIGH","title":"Tên rock","percentDone":33,"milestones":"0/4","milestoneDone":0,"milestoneTotal":4,"owner":"Anna Nguyen","overdueDays":104,"milestoneList":[{"title":"Tên milestone","status":"ON_TRACK","deadline":"31/12/2025","overdueDays":104,"isOverdue":true,"percentDone":5,"currentValue":43,"fromValue":0,"toValue":1000,"assignee":"Anna Nguyen"}]}
+{"id":"_id khác","risk":"LOW","title":"Tên rock 2","percentDone":80,"milestones":"3/4","milestoneDone":3,"milestoneTotal":4,"owner":"Tên owner","overdueDays":-14,"milestoneList":[]}
 \`\`\`
 - id         : BẮT BUỘC — lấy từ trường \`id\` của rock trong data tool trả về
-- milestoneList: lấy toàn bộ từ mảng milestones tool trả về (bao gồm cả DONE)
+- milestoneList: lấy toàn bộ từ mảng milestones tool trả về (bao gồm cả DONE) — nằm inline trong cùng dòng với rock
 - KHÔNG tính forecast, KHÔNG gợi ý action trong list mode
-Sau JSON block, thêm text:
+Sau NDJSON block, thêm text:
 "───────────────────────────────
 📊 [X] HIGH🔴  [Y] MEDIUM🟡  [Z] LOW🟢  [W] DONE✅
 
@@ -204,41 +183,12 @@ hành động gắn tên người phụ trách."
 
 ─── MODE 2: getGoalDetail → schema "goal-detail" (rich card UI) ───
 Phân tích chi tiết [tên rock / "X mục tiêu HIGH risk"]:
-\`\`\`json
-{
-  "type": "goal-detail",
-  "goals": [
-    {
-      "risk": "HIGH",
-      "title": "Tên rock",
-      "percentDone": 62,
-      "milestones": "5/8",
-      "owner": "Phúc Quách",
-      "overdueDays": 104,
-      "forecastDate": "20/07/2026",
-      "revenue": null,
-      "actions": [
-        "[Phúc Quách] Unblock milestone 'Quay 5 video tháng 1' (trễ 60 ngày) — book lịch quay trong tuần này",
-        "[Anna Nguyen] Đẩy milestone 'Onboard 200 users' (còn 14 ngày, 40%) lên 80% trước cuối tháng",
-        "[Phúc Quách] Họp sync tiến độ milestone 'Launch landing page' đang stalled (0%)"
-      ],
-      "milestoneDetails": [
-        {
-          "title": "Tên milestone",
-          "percentDone": 75,
-          "assignee": "Phúc Quách",
-          "overdueDays": 104,
-          "status": "ON_TRACK",
-          "deadline": "31/12/2025",
-          "fromValue": 0,
-          "toValue": 1000
-        }
-      ]
-    }
-  ]
-}
+\`\`\`ndjson
+{"_ndjson":"goal-detail","total":2}
+{"risk":"HIGH","title":"Tên rock","percentDone":62,"milestones":"5/8","owner":"Phúc Quách","overdueDays":104,"forecastDate":"20/07/2026","revenue":null,"actions":["[Phúc Quách] Unblock milestone 'Quay 5 video tháng 1' (trễ 60 ngày) — book lịch quay trong tuần này","[Anna Nguyen] Đẩy milestone 'Onboard 200 users' (còn 14 ngày, 40%) lên 80% trước cuối tháng"],"milestoneDetails":[{"title":"Tên milestone","percentDone":75,"assignee":"Phúc Quách","overdueDays":104,"status":"ON_TRACK","deadline":"31/12/2025","fromValue":0,"toValue":1000}]}
+{"risk":"MEDIUM","title":"Rock thứ hai","percentDone":50,"milestones":"2/4","owner":"Tên owner","overdueDays":-7,"forecastDate":"15/08/2026","revenue":null,"actions":["[Owner] Action cụ thể gắn milestone"],"milestoneDetails":[]}
 \`\`\`
-Sau JSON block, thêm owner summary:
+Sau NDJSON block, thêm owner summary:
 "───────────────────────────────
 📋 Tổng hợp theo người phụ trách:
 
@@ -262,8 +212,8 @@ FIELD RULES:
 
 Nếu user đồng ý phân tích sâu (bất kỳ dạng: "có", "ok", "yes", "làm đi"...):
 - Gọi getGoalDetail cho TỪNG rock HIGH🔴 theo thứ tự
-- Xuất 1 JSON object type "goal-detail" chứa TẤT CẢ high rocks
-- Thêm owner summary sau JSON block
+- Xuất 1 NDJSON block "goal-detail" — mỗi rock HIGH là 1 dòng riêng biệt
+- Thêm owner summary sau NDJSON block
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 QUY TẮC

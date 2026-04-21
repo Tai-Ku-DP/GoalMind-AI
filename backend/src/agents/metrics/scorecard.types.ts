@@ -12,7 +12,7 @@ export interface IScorecardScore {
 
 export interface IScorecardGoal {
   value: number;
-  orientation: 'gte' | 'lte';
+  orientation: 'gte' | 'lte' | 'gt' | 'lt' | 'equal';
 }
 
 export interface IScorecardOwner {
@@ -33,8 +33,9 @@ export interface IScorecardMeasurable {
   periodInterval: 'weekly' | 'monthly' | 'quarterly' | 'annual';
   goal: IScorecardGoal;
   goalAdvanced?: Array<{
+    id?: string;
     value: number;
-    orientation: 'gte' | 'lte';
+    orientation: 'gte' | 'lte' | 'gt' | 'lt' | 'equal';
     periodStartDate: string;
     periodEndDate: string;
     periodInterval: string;
@@ -74,13 +75,28 @@ export interface IMetricCalculationResponse {
 export type TrendDirection = 'up' | 'down' | 'flat';
 export type OffTrackSeverity = 'CRITICAL' | 'WARNING' | 'ON_TRACK';
 
+export interface IGoalAdvancedStat {
+  periodInterval: string;
+  from: string;
+  to: string;
+  target: number;
+  orientation: string;
+  metricCalculation: string;
+  actual: number | null;
+  remaining: number | null;
+  rate: number | null;
+}
+
 export interface IProcessedScorecardMetric {
   id: string;
   title: string;
   unit: string;
   owner: string;
   goalValue: number;
-  goalOrientation: 'gte' | 'lte';
+  goalOrientation: 'gte' | 'lte' | 'gt' | 'lt' | 'equal';
+  /** Goal thực tế cho tuần mới nhất — có thể là goalAdvanced */
+  latestEffectiveGoalValue: number;
+  latestIsAdvancedGoal: boolean;
   latestValue: number | null;
   achievementPct: number | null;
   isOnTrack: boolean;
@@ -89,10 +105,15 @@ export interface IProcessedScorecardMetric {
   trend: TrendDirection;
   trendLabel: string;
   weeklyChangePct: number | null;
+  streakWeeks: number;
   recentScores: Array<{
     weekStart: string;
     weekEnd: string;
     value: number | null;
+    goalValue: number;
+    isAdvancedGoal: boolean;
     achievementPct: number | null;
   }>;
+  /** Thống kê tổng hợp (overall) cho từng goalAdvanced period — hiển thị dạng tab */
+  goalAdvancedStats: IGoalAdvancedStat[];
 }

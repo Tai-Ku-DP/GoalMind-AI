@@ -6,7 +6,11 @@ export function createActionTools(client: SimplamoClient) {
   const listActions = tool(
     async ({ goalId, status, teamId }) => {
       try {
-        const data = await client.listActions({ goalId, status, teamId });
+        const data = await client.listActions({
+          goalId: goalId ?? undefined,
+          status: status ?? undefined,
+          teamId: teamId ?? undefined,
+        });
         const actions = data.actions ?? data;
         const trimmed = (Array.isArray(actions) ? actions : [])
           .slice(0, 30)
@@ -35,12 +39,13 @@ export function createActionTools(client: SimplamoClient) {
         Call when user asks about their tasks, to-dos, issues, or what needs to be done.
         Can filter by goalId, status, or teamId.`,
       schema: z.object({
-        goalId: z.string().optional().describe('Filter by goal ID'),
+        goalId: z.string().optional().nullable().describe('Filter by goal ID'),
         status: z
           .string()
           .optional()
+          .nullable()
           .describe('Filter by status: "done" or "undone"'),
-        teamId: z.string().optional().describe('Filter by team ID'),
+        teamId: z.string().optional().nullable().describe('Filter by team ID'),
       }),
     },
   );
@@ -50,10 +55,10 @@ export function createActionTools(client: SimplamoClient) {
       try {
         const data = await client.createAction({
           title,
-          goalId,
-          dueDate,
-          priority,
-          owner,
+          goalId: goalId ?? undefined,
+          dueDate: dueDate ?? undefined,
+          priority: priority ?? undefined,
+          owner: owner ?? undefined,
         });
         return JSON.stringify({
           success: true,
@@ -80,16 +85,19 @@ export function createActionTools(client: SimplamoClient) {
         goalId: z
           .string()
           .optional()
+          .nullable()
           .describe('Goal ID to link this action to'),
         dueDate: z
           .string()
           .optional()
+          .nullable()
           .describe('Due date in ISO 8601 format (YYYY-MM-DD)'),
         priority: z
           .enum(['low', 'medium', 'high'])
           .optional()
+          .nullable()
           .describe('Priority level, defaults to medium'),
-        owner: z.string().optional().describe('Owner user ID'),
+        owner: z.string().optional().nullable().describe('Owner user ID'),
       }),
     },
   );
