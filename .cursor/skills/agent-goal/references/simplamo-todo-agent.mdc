@@ -1,0 +1,210 @@
+---
+alwaysApply: false
+---
+
+# Simplamo Todo Integration — Action Agent
+
+## Mô tả tổng quan
+
+Agent này tích hợp với Simplamo API để:
+
+1. **Xem danh sách todo hôm nay** — lấy toàn bộ todo đang hoạt động và lọc theo ngày hôm nay.
+2. **Phát hiện công việc trễ hạn** — tìm những todo có `dueDate` < ngày hiện tại và `status != DONE`.
+3. **Tạo todo nhanh** — khi metric/goal agent gợi ý hành động, hiển thị nút "Tạo Todo" ngay trên FE.
+4. **Cập nhật todo** — thay đổi status, tiêu đề, dueDate, priority của một todo cụ thể.
+
+---
+
+## Thông tin xác thực (Auth)
+
+Tất cả request đều dùng chung header sau:
+
+```
+Authorization: Bearer <token từ context người dùng>
+Content-Language: vi
+tenant-id: core
+Accept: */*
+```
+
+Các hằng số dùng chung:
+
+- `TEAM_ID`: `60fe00f28ae1ac0057c5422c`
+- `BASE_URL_EOS`: `https://api.simplamo.com/api/eos-core`
+- `BASE_URL_AUTH`: `https://api.simplamo.com/api/auth`
+
+---
+
+## Xác định danh tính người dùng (User Identity)
+
+### Quy tắc bắt buộc
+
+**Trước khi thực hiện bất kỳ thao tác nào liên quan đến todo, metric, hoặc goal của "tôi" — agent PHẢI biết `currentUserId` của người dùng đang hỏi.**
+
+### API lấy thông tin user hiện tại
+
+```
+GET https://api.simplamo.com/api/auth/users/me?ignoreTracking=true
+Headers: Authorization, tenant-id, content-language (như trên)
+```
+
+**Response trả về object user, lấy field `_id` làm `currentUserId`:**
+
+```json
+{
+  "_id": "<currentUserId>",
+  "email": "...",
+  "name": "...",
+  ...
+}
+```
+
+### Caching — bắt buộc
+
+- Kết quả `/users/me` phải được **cache trong suốt session** (lưu vào biến `_cachedCurrentUser`).
+- **Chỉ gọi lại** khi nhận lỗi `401` (token hết hạn) hoặc khi người dùng yêu cầu rõ ràng.
+- Không được gọi `/users/me` nhiều lần trong cùng một luồng xử lý.
+
+### Logic xác định "todo của tôi"
+
+Sau khi có `currentUserId`, dùng để filter theo thứ tự ưu tiên:
+
+```
+todo thuộc về tôi nếu:
+  todo.owner._id === currentUserId
+  HOẶC todo.ownerId === currentUserId
+  HOẶC todo.user._id === currentUserId
+```
+
+Áp dụng filter này cho **tất cả** các câu hỏi dạng "của tôi", "tôi đang làm", "tôi cần làm".
+
+---
+
+## API 1 — Lấy danh sách Todo
+
+**Endpoint:** `GET /todos`
+
+**Query params:**
+| Param | Giá trị mặc định | Ghi chú |
+|---|---|---|
+| `getAll` | `true` | Đặt `true` để lấy toàn bộ, bỏ qua phân trang |
+| `inMeeting` | `false` | |
+| `isArchived` | `false` | Chỉ lấy todo chưa archive |
+| `teamIds` | `60fe00f28ae1ac0057c5422c` | |
+| `itemPerPage` | `50` | Dùng khi `getAll=false` |
+| `page` | `1` | Dùng khi `getAll=false` |
+
+**Ví dụ fetch toàn bộ:**
+
+```
+GET https://api.simplamo.com/api/eos-core/todos?getAll=true&inMeeting=false&isArchived=false&teamIds=60fe00f28ae1ac0057c5422c
+```
+
+**Logic lọc phía client:**
+
+- **Todo hôm nay:** `dueDate` nằm trong ngày hôm nay (so sánh theo date, bỏ qua giờ)
+- **Todo trễ hạn:** `dueDate < today` **VÀ** `status !== "DONE"`
+
+---
+
+## API 2 — Tạo Todo nhanh
+
+**Endpoint:** `POST /todos/many`
+
+**Body (array):**
+
+```json
+[
+  {
+    "teamId": "60fe00f28ae1ac0057c5422c",
+    "ownerId": "<currentUserId — lấy từ /users/me>",
+    "title": "<Tiêu đề todo>",
+    "status": "NOT_STARTED",
+    "description": "",
+    "dueDate": "<ISO 8601 string, ví dụ: 2026-04-29T04:06:25.753Z>",
+    "priorityType": "HIGH"
+  }
+]
+```
+
+**Các giá trị hợp lệ:**
+
+- `status`: `NOT_STARTED` | `IN_PROGRESS` | `DONE`
+- `priorityType`: `HIGH` | `MEDIUM` | `LOW`
+
+**Ghi chú:** API nhận một mảng, có thể tạo nhiều todo cùng lúc trong một request.
+
+---
+
+## API 3 — Cập nhật Todo
+
+**Endpoint:** `PATCH /todos/:todoId`
+
+**Body:**
+
+```json
+{
+  "title": "<Tiêu đề mới>",
+  "description": "",
+  "dueDate": "<ISO 8601 string>",
+  "ownerId": "<currentUserId — lấy từ /users/me>",
+  "teamId": "60fe00f28ae1ac0057c5422c",
+  "teamIds": [],
+  "linkAttachments": [],
+  "status": "NOT_STARTED",
+  "priorityType": "HIGH",
+  "saveHistoryDescription": true
+}
+```
+
+---
+
+## Hành vi của Agent
+
+### Flow thực thi chuẩn
+
+```
+1. Nhận câu hỏi từ người dùng
+2. Nếu chưa có _cachedCurrentUser → gọi GET /users/me → cache kết quả
+3. Lấy currentUserId = _cachedCurrentUser._id
+4. Thực hiện hành động tương ứng với currentUserId đã biết
+```
+
+### Câu hỏi agent có thể trả lời
+
+| Câu hỏi người dùng              | Hành động của agent                                                                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| "Hôm nay tôi có việc gì?"       | Resolve `currentUserId` → GET todos → filter `ownerId == currentUserId AND dueDate == today`                   |
+| "Công việc nào đang trễ hạn?"   | Resolve `currentUserId` → GET todos → filter `ownerId == currentUserId AND dueDate < today AND status != DONE` |
+| "Tôi đang làm gì?"              | Resolve `currentUserId` → GET todos → filter `ownerId == currentUserId AND status == IN_PROGRESS`              |
+| "Tạo todo: [tên]"               | Resolve `currentUserId` → POST `/todos/many` với `ownerId = currentUserId`                                     |
+| "Cập nhật todo [id] thành DONE" | Gọi PATCH `/todos/:id` với `status: "DONE"`                                                                    |
+
+### Tích hợp với Metric/Goal Agent
+
+Khi **metric agent** hoặc **goal agent** phân tích và **gợi ý hành động cụ thể**, agent phải:
+
+1. Trả về danh sách `suggestedActions` trong response, mỗi action có cấu trúc:
+
+```json
+{
+  "title": "Tên hành động gợi ý",
+  "dueDate": "<ngày đề xuất, mặc định cuối tuần này>",
+  "priorityType": "HIGH" | "MEDIUM" | "LOW",
+  "description": "Lý do gợi ý từ phân tích metric/goal"
+}
+```
+
+2. **FE phải hiển thị nút "➕ Tạo Todo"** bên cạnh mỗi hành động gợi ý.
+
+3. Khi người dùng nhấn nút, gọi ngay `POST /todos/many` với dữ liệu của action đó.
+
+4. Sau khi tạo thành công, đổi nút thành "✅ Đã tạo" (disabled).
+
+---
+
+## Xử lý lỗi
+
+- Nếu API trả về `401`: Xóa `_cachedCurrentUser`, thông báo người dùng token hết hạn và cần đăng nhập lại.
+- Nếu API trả về `4xx` khác: Hiển thị message lỗi từ response body.
+- Nếu network timeout: Retry tối đa 2 lần trước khi báo lỗi.
+- Không tự ý hardcode `ownerId` — luôn lấy từ cache hoặc gọi `/users/me`.

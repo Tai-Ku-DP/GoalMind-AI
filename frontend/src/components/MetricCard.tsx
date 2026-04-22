@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "./ui/tooltip";
+import { SuggestedActionsView, QuickCreateActionButton, type SuggestedAction } from "./TodoCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ export interface MetricItem {
   title: string;
   unit: string;
   owner: string;
+  ownerId?: string;
   goal: number;
   goalOrientation: "gte" | "lte" | "gt" | "lt" | "equal";
   /** Goal thực tế cho tuần mới nhất (có thể là goalAdvanced) */
@@ -49,6 +51,7 @@ export interface MetricItem {
   trend: string;
   weeklyChangePct?: number | null;
   actions?: string[];
+  suggestedActions?: SuggestedAction[];
   trendLabel?: string;
   avgWeeklyChangePct?: number | null;
   history?: {
@@ -490,11 +493,13 @@ export function MetricCard({ metric }: { metric: MetricItem }) {
           <p className="text-[11px] text-gray-500 dark:text-gray-400">
             Thực tế
           </p>
+
           <p
             className={`mt-1 text-2xl font-bold tabular-nums ${metric.latestValue === null ? "text-gray-300" : sev.valueColor}`}
           >
             {metric.latestValue === null ? "—" : latest.toLocaleString()}
           </p>
+
           <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
             {metric.unit}/tuần
           </p>
@@ -548,7 +553,7 @@ export function MetricCard({ metric }: { metric: MetricItem }) {
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Plain text actions */}
       {metric.actions && metric.actions.length > 0 && (
         <div className="mt-4">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
@@ -558,15 +563,25 @@ export function MetricCard({ metric }: { metric: MetricItem }) {
             {metric.actions.map((action, i) => (
               <li
                 key={i}
-                className="flex items-start gap-2.5 text-xs text-gray-700 dark:text-gray-300"
+                className="flex items-start gap-2.5"
               >
                 <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-500 dark:bg-gray-800">
                   {i + 1}
                 </span>
-                <span className="leading-relaxed">{action}</span>
+                <span className="flex-1 text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+                  {action}
+                </span>
+                <QuickCreateActionButton actionText={action} ownerId={metric.ownerId} />
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {/* Suggested actions with "Tạo Todo" button */}
+      {metric.suggestedActions && metric.suggestedActions.length > 0 && (
+        <div className="mt-4">
+          <SuggestedActionsView actions={metric.suggestedActions} />
         </div>
       )}
 
@@ -585,12 +600,14 @@ export function MetricCard({ metric }: { metric: MetricItem }) {
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
               Lịch sử {metric.history.length} tuần
             </p>
+
             {metric.history.some((h) => h.isAdvancedGoal) && (
               <span className="text-[10px] text-purple-500 dark:text-purple-400 flex items-center gap-0.5">
                 <span>★</span> Tuần có mục tiêu nâng cao
               </span>
             )}
           </div>
+
           <HistoryBars
             history={metric.history}
             goal={effectiveGoal}

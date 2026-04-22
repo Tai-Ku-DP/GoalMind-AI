@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { QuickCreateActionButton } from "./TodoCard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ export interface MilestoneDetail {
 }
 
 export interface GoalData {
+  id: string;
   risk: RiskLevel;
   title: string;
   percentDone: number;
@@ -28,7 +30,8 @@ export interface GoalData {
   overdueDays: number; // positive = overdue, negative = days remaining
   forecastDate: string; // e.g. "13/06/2026"
   revenue?: string | null; // e.g. "540tr" or null
-  actions: string[];
+  actions?: string[];
+  ownerId?: string;
   milestoneDetails?: MilestoneDetail[] | null;
 }
 
@@ -107,6 +110,8 @@ const RISK_CONFIG: Record<
 export function GoalCard({ goal }: { goal: GoalData }) {
   const cfg = RISK_CONFIG[goal.risk] ?? RISK_CONFIG.LOW;
   const isOverdue = goal.overdueDays > 0;
+
+  console.log("goal", goal);
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -189,7 +194,10 @@ export function GoalCard({ goal }: { goal: GoalData }) {
             {goal.milestoneDetails.map((m, i) => {
               const isDone = m.status === "DONE";
               const isOverdue = m.overdueDays > 0;
-              const hasRange = m.fromValue != null && m.toValue != null && m.toValue !== m.fromValue;
+              const hasRange =
+                m.fromValue != null &&
+                m.toValue != null &&
+                m.toValue !== m.fromValue;
               const range = m.toValue! - m.fromValue!;
               const currentValue = hasRange
                 ? Math.round(m.fromValue! + (range * m.percentDone) / 100)
@@ -202,9 +210,13 @@ export function GoalCard({ goal }: { goal: GoalData }) {
                     {/* Status icon */}
                     <div className="mt-0.5 shrink-0">
                       {isDone ? (
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white text-[9px]">✓</span>
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white text-[9px]">
+                          ✓
+                        </span>
                       ) : isOverdue ? (
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-400 text-red-400 text-[9px]">!</span>
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-400 text-red-400 text-[9px]">
+                          !
+                        </span>
                       ) : (
                         <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-gray-300 dark:border-gray-600" />
                       )}
@@ -212,7 +224,9 @@ export function GoalCard({ goal }: { goal: GoalData }) {
 
                     {/* Title + meta */}
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-medium leading-snug ${isDone ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-800 dark:text-gray-200"}`}>
+                      <p
+                        className={`text-xs font-medium leading-snug ${isDone ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-800 dark:text-gray-200"}`}
+                      >
                         {m.title}
                       </p>
                       {/* Due date row */}
@@ -228,9 +242,7 @@ export function GoalCard({ goal }: { goal: GoalData }) {
                               📅 {m.deadline}
                             </span>
                           )}
-                          {m.assignee && (
-                            <span>{m.assignee}</span>
-                          )}
+                          {m.assignee && <span>{m.assignee}</span>}
                         </div>
                       )}
 
@@ -243,13 +255,19 @@ export function GoalCard({ goal }: { goal: GoalData }) {
                               <span className="font-medium text-gray-600 dark:text-gray-400">
                                 {currentValue!.toLocaleString()}
                               </span>
-                              <span>{m.toValue! >= 1000 ? `${(m.toValue! / 1000).toFixed(0)}K` : m.toValue}</span>
+                              <span>
+                                {m.toValue! >= 1000
+                                  ? `${(m.toValue! / 1000).toFixed(0)}K`
+                                  : m.toValue}
+                              </span>
                             </div>
                           )}
                           <div className="relative h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all ${isOverdue ? "bg-red-400" : "bg-blue-500"}`}
-                              style={{ width: `${Math.min(m.percentDone, 100)}%` }}
+                              style={{
+                                width: `${Math.min(m.percentDone, 100)}%`,
+                              }}
                             />
                           </div>
                         </div>
@@ -257,13 +275,15 @@ export function GoalCard({ goal }: { goal: GoalData }) {
                     </div>
 
                     {/* Percent badge */}
-                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
-                      isDone
-                        ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
-                        : isOverdue
-                          ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300"
-                          : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                    }`}>
+                    <span
+                      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                        isDone
+                          ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+                          : isOverdue
+                            ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300"
+                            : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                      }`}
+                    >
                       {m.percentDone}%
                     </span>
                   </div>
@@ -275,22 +295,33 @@ export function GoalCard({ goal }: { goal: GoalData }) {
       )}
 
       {/* Actions */}
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-        Đề xuất hành động
-      </p>
-      <ul className="mt-1.5 space-y-0">
-        {goal.actions.map((action, i) => (
-          <li
-            key={i}
-            className="flex items-start gap-2 border-b border-gray-50 py-2 text-xs text-gray-700 last:border-none dark:border-gray-800 dark:text-gray-300"
-          >
-            <span
-              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`}
-            />
-            {action}
-          </li>
-        ))}
-      </ul>
+      {goal.actions && goal.actions.length > 0 && (
+        <>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            Đề xuất hành động
+          </p>
+          <ul className="mt-1.5 space-y-0">
+            {goal.actions.map((action, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 border-b border-gray-50 py-2 last:border-none dark:border-gray-800"
+              >
+                <span
+                  className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`}
+                />
+                <span className="flex-1 text-xs text-gray-700 dark:text-gray-300">
+                  {action}
+                </span>
+                <QuickCreateActionButton
+                  rockId={goal?.id}
+                  actionText={action}
+                  ownerId={goal.ownerId}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
@@ -361,16 +392,25 @@ function GoalListItem({ rock, index }: { rock: GoalListRock; index: number }) {
           )}
 
           {/* Risk badge */}
-          <span className={`hidden sm:inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
+          <span
+            className={`hidden sm:inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${cfg.badge}`}
+          >
             {cfg.label}
           </span>
 
           {/* Chevron */}
           <svg
             className={`h-4 w-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </div>
       </button>
@@ -407,7 +447,7 @@ function GoalListItem({ rock, index }: { rock: GoalListRock; index: number }) {
             <ul className="mt-2 divide-y divide-gray-50 dark:divide-gray-800 px-4 pb-3">
               {rock.milestoneList.map((m, i) => {
                 const isDone = m.status === "DONE";
-                const mOverdue = (m.isOverdue ?? m.overdueDays > 0);
+                const mOverdue = m.isOverdue ?? m.overdueDays > 0;
                 const hasRange =
                   m.fromValue != null &&
                   m.toValue != null &&
@@ -419,16 +459,22 @@ function GoalListItem({ rock, index }: { rock: GoalListRock; index: number }) {
                       {/* Status icon */}
                       <div className="mt-0.5 shrink-0">
                         {isDone ? (
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white text-[9px]">✓</span>
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white text-[9px]">
+                            ✓
+                          </span>
                         ) : mOverdue ? (
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-400 text-red-400 text-[9px]">!</span>
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-400 text-red-400 text-[9px]">
+                            !
+                          </span>
                         ) : (
                           <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-gray-300 dark:border-gray-600" />
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium leading-snug ${isDone ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-800 dark:text-gray-200"}`}>
+                        <p
+                          className={`text-xs font-medium leading-snug ${isDone ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-800 dark:text-gray-200"}`}
+                        >
                           {m.title}
                         </p>
                         {/* Meta */}
@@ -465,7 +511,9 @@ function GoalListItem({ rock, index }: { rock: GoalListRock; index: number }) {
                             <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${mOverdue ? "bg-red-400" : "bg-blue-500"}`}
-                                style={{ width: `${Math.min(m.percentDone, 100)}%` }}
+                                style={{
+                                  width: `${Math.min(m.percentDone, 100)}%`,
+                                }}
                               />
                             </div>
                           </div>
@@ -473,13 +521,15 @@ function GoalListItem({ rock, index }: { rock: GoalListRock; index: number }) {
                       </div>
 
                       {/* Percent badge */}
-                      <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
-                        isDone
-                          ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
-                          : mOverdue
-                            ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300"
-                            : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                      }`}>
+                      <span
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                          isDone
+                            ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+                            : mOverdue
+                              ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300"
+                              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                        }`}
+                      >
                         {m.percentDone}%
                       </span>
                     </div>
@@ -520,10 +570,22 @@ export function parseGoalsFromText(text: string): ParsedGoalResponse | null {
 
     // Discriminated by "type" field on object, or by array shape
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-      if (raw.type === "goal-list" && Array.isArray(raw.rocks) && raw.rocks.length > 0) {
-        return { type: "goal-list", rocks: raw.rocks as GoalListRock[], summary };
+      if (
+        raw.type === "goal-list" &&
+        Array.isArray(raw.rocks) &&
+        raw.rocks.length > 0
+      ) {
+        return {
+          type: "goal-list",
+          rocks: raw.rocks as GoalListRock[],
+          summary,
+        };
       }
-      if (raw.type === "goal-detail" && Array.isArray(raw.goals) && raw.goals.length > 0) {
+      if (
+        raw.type === "goal-detail" &&
+        Array.isArray(raw.goals) &&
+        raw.goals.length > 0
+      ) {
         return { type: "goal-detail", goals: raw.goals as GoalData[], summary };
       }
     }
@@ -531,7 +593,9 @@ export function parseGoalsFromText(text: string): ParsedGoalResponse | null {
     // Legacy: bare array with GoalData (backward compat)
     if (Array.isArray(raw) && raw.length > 0 && raw[0].title && raw[0].risk) {
       // Detect list vs detail by presence of milestoneDetails or actions array
-      const isDetail = raw.some((r: GoalData) => r.milestoneDetails && r.milestoneDetails.length > 0);
+      const isDetail = raw.some(
+        (r: GoalData) => r.milestoneDetails && r.milestoneDetails.length > 0,
+      );
       if (isDetail) {
         return { type: "goal-detail", goals: raw as GoalData[], summary };
       }

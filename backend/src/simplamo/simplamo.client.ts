@@ -5,6 +5,10 @@ import {
   IParamsListRocks,
   IPramsUpdateRockStatus,
   ISimplamoClient,
+  ICurrentUser,
+  ITodo,
+  ICreateTodoPayload,
+  IUpdateTodoPayload,
 } from './types';
 import { IRock } from 'src/agents/goal/types';
 import type {
@@ -28,6 +32,36 @@ export class SimplamoClient implements ISimplamoClient {
       },
       timeout: 10000,
     });
+
+    this.http.interceptors.response.use(
+      (res) => res,
+      (err) => {
+        const status: number = err.response?.status ?? 0;
+        const apiErr = err.response?.data?.error;
+        const message: string = apiErr?.message ?? err.message;
+        const details = apiErr?.details;
+        const detailStr = details?.length
+          ? ' — ' +
+            details
+              .map(
+                (d: { path: string; message: string }) =>
+                  `${d.path}: ${d.message}`,
+              )
+              .join(', ')
+          : '';
+        const clean = new Error(`[Simplamo ${status}] ${message}${detailStr}`);
+        return Promise.reject(clean);
+      },
+    );
+  }
+
+  // ── Current User ──
+
+  async getCurrentUser(): Promise<ICurrentUser> {
+    const { data } = await this.http.get<ICurrentUser>('/auth/users/me', {
+      params: { ignoreTracking: true },
+    });
+    return data;
   }
 
   // ── Rocks (Goals) ──
@@ -68,7 +102,6 @@ export class SimplamoClient implements ISimplamoClient {
     periodInterval?: string;
     isArchived?: boolean;
   }): Promise<IScorecardMeasurable[]> {
-    console.log('params', params);
     const { data } = await this.http.get<IScorecardMeasurable[]>(
       '/eos-core/score-cards/measurables',
       {
@@ -80,8 +113,6 @@ export class SimplamoClient implements ISimplamoClient {
         },
       },
     );
-
-    console.log('CALL API getScorecardMeasurables');
 
     if (Array.isArray(data)) return data;
     return (data as { data: IScorecardMeasurable[] }).data ?? [];
@@ -147,6 +178,59 @@ export class SimplamoClient implements ISimplamoClient {
     const { data } = await this.http.patch(`/eos-core/actions/${actionId}`, {
       done,
     });
+    return data;
+  }
+
+  // ── Todos ──
+
+  async listTodos(params: {
+    teamId: string;
+    getAll?: boolean;
+    isArchived?: boolean;
+    inMeeting?: boolean;
+  }): Promise<ITodo[]> {
+    const { data } = await this.http.get<
+      ITodo[] | { items: ITodo[] } | { data: ITodo[] }
+    >('/eos-core/todos', {
+      params: {
+        getAll: params.getAll ?? true,
+        inMeeting: params.inMeeting ?? false,
+        isArchived: params.isArchived ?? false,
+        teamIds: params.teamId,
+      },
+      headers: { 'Content-Language': 'vi' },
+    });
+
+    if (Array.isArray(data)) return data;
+    // API trả về { items: [...], total, page, itemPerPage }
+    const wrapped = data as { items?: ITodo[]; data?: ITodo[] };
+    return wrapped.items ?? wrapped.data ?? [];
+  }
+
+  async createTodos(todos: ICreateTodoPayload[]): Promise<ITodo[]> {
+    console.log('[createTodos] payload:', JSON.stringify(todos));
+    const { data } = await this.http.post<ITodo[]>(
+      '/eos-core/todos/many',
+      todos,
+      { headers: { 'Content-Language': 'vi' } },
+    );
+    return Array.isArray(data) ? data : [data as unknown as ITodo];
+  }
+
+  async updateTodo(
+    todoId: string,
+    payload: IUpdateTodoPayload,
+  ): Promise<ITodo> {
+    const { data } = await this.http.patch<ITodo>(
+      `/eos-core/todos/${todoId}`,
+      {
+        saveHistoryDescription: true,
+        teamIds: [],
+        linkAttachments: [],
+        ...payload,
+      },
+      { headers: { 'Content-Language': 'vi' } },
+    );
     return data;
   }
 }

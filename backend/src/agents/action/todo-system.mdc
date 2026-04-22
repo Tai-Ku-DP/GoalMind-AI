@@ -1,0 +1,47 @@
+---
+alwaysApply: false
+---
+
+Đây là curl get list Todo của tôi, nếu bạn để getAll=true thì nó sẽ get hết tất cả todo về không quan tâm tới phân trang.
+
+curl 'https://api.simplamo.com/api/eos-core/todos?getAll=false&inMeeting=false&isArchived=false&itemPerPage=50&page=1&teamIds=60fe00f28ae1ac0057c5422c' \
+ -H 'sec-ch-ua-platform: "macOS"' \
+ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MGZlOTViOTAzYmYzNjAwNTcwYTcwZWEiLCJlbWFpbCI6InRoYW5odHVuZ0B0dW5ndHVuZy52biIsImlhdCI6MTc3NDI0MTY3NiwiZXhwIjoxODA1Nzk5Mjc2fQ.bgDAdPWkzjGeHGBapiedqFqWiXCqgfR9TD5WPbtZ1iM' \
+ -H 'Referer: https://core.simplamo.com/' \
+ -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+ -H 'sec-ch-ua-mobile: ?0' \
+ -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10*15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+ -H 'Accept: */\_' \
+ -H 'Content-Language: vi' \
+ -H 'tenant-id: core'
+
+Đây là api tạo todo nhanh của tôi
+
+curl 'https://api.simplamo.com/api/eos-core/todos/many' \
+ -H 'sec-ch-ua-platform: "macOS"' \
+ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MGZlOTViOTAzYmYzNjAwNTcwYTcwZWEiLCJlbWFpbCI6InRoYW5odHVuZ0B0dW5ndHVuZy52biIsImlhdCI6MTc3NDI0MTY3NiwiZXhwIjoxODA1Nzk5Mjc2fQ.bgDAdPWkzjGeHGBapiedqFqWiXCqgfR9TD5WPbtZ1iM' \
+ -H 'Referer: https://core.simplamo.com/' \
+ -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+ -H 'sec-ch-ua-mobile: ?0' \
+ -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10*15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+ -H 'Accept: */\_' \
+ -H 'Content-Type: application/json' \
+ -H 'Content-Language: vi' \
+ -H 'tenant-id: core' \
+ --data-raw '[{"teamId":"60fe00f28ae1ac0057c5422c","ownerId":"60fe95b903bf3600570a70ea","title":"Test","status":"NOT_STARTED","description":"","dueDate":"2026-04-29T04:06:25.753Z","priorityType":"HIGH"}]'
+
+Đây là api update Todo của tôi
+
+curl 'https://api.simplamo.com/api/eos-core/todos/69e84a21efa25f001da29f93' \
+ -X 'PATCH' \
+ -H 'sec-ch-ua-platform: "macOS"' \
+ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MGZlOTViOTAzYmYzNjAwNTcwYTcwZWEiLCJlbWFpbCI6InRoYW5odHVuZ0B0dW5ndHVuZy52biIsImlhdCI6MTc3NDI0MTY3NiwiZXhwIjoxODA1Nzk5Mjc2fQ.bgDAdPWkzjGeHGBapiedqFqWiXCqgfR9TD5WPbtZ1iM' \
+ -H 'Referer: https://core.simplamo.com/' \
+ -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+ -H 'sec-ch-ua-mobile: ?0' \
+ -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10*15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+ -H 'Accept: */\_' \
+ -H 'Content-Type: application/json' \
+ -H 'Content-Language: vi' \
+ -H 'tenant-id: core' \
+ --data-raw '{"description":"","dueDate":"2026-04-29T04:06:25.753Z","linkAttachments":[],"ownerId":"60fe95b903bf3600570a70ea","saveHistoryDescription":true,"status":"NOT_STARTED","teamId":"60fe00f28ae1ac0057c5422c","teamIds":[],"title":"Test1","priorityType":"HIGH"}'

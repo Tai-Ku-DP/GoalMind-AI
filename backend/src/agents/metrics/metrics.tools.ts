@@ -317,6 +317,7 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
     title: m.title.trim(),
     unit: m.unit,
     owner: m.owner?.fullName ?? 'N/A',
+    ownerId: m.owner?._id ?? '',
     goalValue: goal.value,
     goalOrientation: goal.orientation,
     latestEffectiveGoalValue: latestEffectiveGoal.value,
@@ -354,6 +355,8 @@ function processMeasurable(m: IScorecardMeasurable): IProcessedScorecardMetric {
 
 // ─── Tool factory ──────────────────────────────────────────────────────────────
 
+const CURRENT_USER_CACHE_KEY = 'currentUser';
+
 export function createMetricsTools(
   client: SimplamoClient,
   config: ConfigService,
@@ -364,6 +367,14 @@ export function createMetricsTools(
     // '60fd7f693e81570057440b4f',
     '60fe00f28ae1ac0057c5422c',
   );
+
+  async function resolveCurrentUserId(): Promise<string> {
+    const cached = cache.get<{ _id: string }>(CURRENT_USER_CACHE_KEY);
+    if (cached) return cached._id;
+    const user = await client.getCurrentUser();
+    cache.set(CURRENT_USER_CACHE_KEY, user, 30 * 60 * 1000);
+    return user._id;
+  }
 
   // ── Shared raw-data cache ───────────────────────────────────────────────────
   // Cache the raw getScorecardMeasurables API response once (5 min TTL).
@@ -386,16 +397,22 @@ export function createMetricsTools(
 
   // ── Tool 1: getScorecardMetrics ─────────────────────────────────────────────
   const getScorecardMetrics = tool(
-    async ({ teamId, interval }) => {
+    async ({ teamId, interval, onlyMine }) => {
       const tid = teamId || defaultTeamId;
-      const cacheKey = `scorecardMetrics:${tid}:${interval ?? 13}`;
+      const baseKey = `scorecardMetrics:${tid}:${interval ?? 13}`;
+      const cacheKey = onlyMine ? `${baseKey}:mine` : baseKey;
       const cached = cache.get<string>(cacheKey);
       if (cached) return cached;
 
       try {
         const raw = await getRawMeasurables(tid, interval ?? 13);
 
-        const processed = raw.map(processMeasurable);
+        let processed = raw.map(processMeasurable);
+
+        if (onlyMine) {
+          const currentUserId = await resolveCurrentUserId();
+          processed = processed.filter((m) => m.ownerId === currentUserId);
+        }
 
         const summary = {
           total: processed.length,
@@ -425,6 +442,7 @@ export function createMetricsTools(
         Returns each metric with: title, unit, owner, goal (value + orientation), latestValue,
         achievementPct, isOnTrack, offTrackSeverity (CRITICAL/WARNING/ON_TRACK),
         consecutiveOffTrackWeeks, trend direction and label, recentScores[].
+        Pass onlyMine=true when user asks about "KPI của tôi", "chỉ số của tôi", or any phrasing indicating only their own metrics.
         Call this when user asks about KPIs, scorecard overview, or wants to see all metrics.`,
       schema: z.object({
         teamId: z
@@ -437,22 +455,36 @@ export function createMetricsTools(
           .optional()
           .nullable()
           .describe('Number of weeks of history to fetch (default 13)'),
+        onlyMine: z
+          .boolean()
+          .optional()
+          .nullable()
+          .describe(
+            'Pass true to return only metrics owned by the current user (resolves via /users/me)',
+          ),
       }),
     },
   );
 
   // ── Tool 2: getOffTrackScorecardMetrics ────────────────────────────────────
   const getOffTrackScorecardMetrics = tool(
-    async ({ teamId, severityFilter }) => {
+    async ({ teamId, severityFilter, onlyMine }) => {
       const tid = teamId || defaultTeamId;
-      const cacheKey = `offtrackMetrics:${tid}:${severityFilter ?? 'all'}`;
+      const baseKey = `offtrackMetrics:${tid}:${severityFilter ?? 'all'}`;
+      const cacheKey = onlyMine ? `${baseKey}:mine` : baseKey;
       const cached = cache.get<string>(cacheKey);
       if (cached) return cached;
 
       try {
         const raw = await getRawMeasurables(tid, 13);
 
-        const processed = raw.map(processMeasurable);
+        let processed = raw.map(processMeasurable);
+
+        if (onlyMine) {
+          const currentUserId = await resolveCurrentUserId();
+          processed = processed.filter((m) => m.ownerId === currentUserId);
+        }
+
         const offTrack = processed.filter((m) => !m.isOnTrack);
 
         // Apply optional severity filter
@@ -497,6 +529,7 @@ export function createMetricsTools(
         CRITICAL 🔴: actual < 60% of goal OR off-track ≥ 3 consecutive weeks.
         WARNING  🟡: actual < 80% of goal OR off-track ≥ 2 consecutive weeks.
         Each result includes consecutiveOffTrackWeeks and trend direction.
+        Pass onlyMine=true when user asks about "KPI của tôi", "chỉ số của tôi off-track", or indicates only their own metrics.
         Call when user asks which KPIs are failing, off-track, or need attention.`,
       schema: z.object({
         teamId: z
@@ -509,6 +542,13 @@ export function createMetricsTools(
           .optional()
           .nullable()
           .describe('Filter to only CRITICAL or WARNING metrics'),
+        onlyMine: z
+          .boolean()
+          .optional()
+          .nullable()
+          .describe(
+            'Pass true to return only metrics owned by the current user (resolves via /users/me)',
+          ),
       }),
     },
   );

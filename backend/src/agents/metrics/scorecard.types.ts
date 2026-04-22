@@ -92,6 +92,7 @@ export interface IProcessedScorecardMetric {
   title: string;
   unit: string;
   owner: string;
+  ownerId: string;
   goalValue: number;
   goalOrientation: 'gte' | 'lte' | 'gt' | 'lt' | 'equal';
   /** Goal thực tế cho tuần mới nhất — có thể là goalAdvanced */

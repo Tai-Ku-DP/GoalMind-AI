@@ -6,6 +6,19 @@ import { computedDeadline } from '../tools';
 import { IRockStatusType } from './types';
 import { ToolCacheService } from '../cache/tool-cache.service';
 
+const CURRENT_USER_CACHE_KEY = 'currentUser';
+
+async function resolveCurrentUserId(
+  client: SimplamoClient,
+  cache: ToolCacheService,
+): Promise<string> {
+  const cached = cache.get<{ _id: string }>(CURRENT_USER_CACHE_KEY);
+  if (cached) return cached._id;
+  const user = await client.getCurrentUser();
+  cache.set(CURRENT_USER_CACHE_KEY, user, 30 * 60 * 1000);
+  return user._id;
+}
+
 export function createGoalTools(
   client: SimplamoClient,
   config: ConfigService,
@@ -15,22 +28,32 @@ export function createGoalTools(
   const defaultSessionId = config.get<string>('SIMPLAMO_SESSION_ID', '');
 
   const listGoals = tool(
-    async ({ teamId, sessionId }) => {
+    async ({ teamId, sessionId, onlyMine }) => {
       const tid = teamId || defaultTeamId;
       const sid = sessionId || defaultSessionId;
-      const cacheKey = `listGoals:${tid}:${sid}`;
+      const baseKey = `listGoals:${tid}:${sid}`;
+      const cacheKey = onlyMine ? `${baseKey}:mine` : baseKey;
 
       const cached = cache.get<string>(cacheKey);
       if (cached) return cached;
 
-      console.log('[TOOL] listGoals called', { teamId, sessionId });
+      console.log('[TOOL] listGoals called', { teamId, sessionId, onlyMine });
       try {
         const rocks = await client.listRocks({
           teamId: tid,
           sessionId: sid,
         });
 
-        const list = Array.isArray(rocks) ? rocks : [];
+        let list = Array.isArray(rocks) ? rocks : [];
+
+        if (onlyMine) {
+          const currentUserId = await resolveCurrentUserId(client, cache);
+          list = list.filter(
+            (r) =>
+              r.ownerId === currentUserId ||
+              (r.rockOwner as any)?._id === currentUserId,
+          );
+        }
         const today = new Date().toLocaleDateString('vi-VN', {
           day: '2-digit',
           month: '2-digit',
@@ -85,6 +108,8 @@ export function createGoalTools(
             isOverdue: deadline.isOverdue,
             rockType: r.rockType,
             owner: r.rockOwner?.fullName,
+            ownerId: r.ownerId,
+            teamId: r.teamId,
             doneMilestones: r.doneMilestones,
             totalMilestones: r.totalMilestones,
             sessionName: r.sessionName,
@@ -113,6 +138,7 @@ export function createGoalTools(
         - position: 1-based display order matching the UI list (use this to resolve "rock số N")
         - daysRemaining: positive = days left, negative = days overdue
         - isOverdue: true if deadline has passed
+        Pass onlyMine=true when user asks about "goals của tôi", "rock của tôi", or any phrasing indicating only their own items.
         teamId and sessionId use defaults from env if omitted.`,
       schema: z.object({
         teamId: z
@@ -126,6 +152,13 @@ export function createGoalTools(
           .nullable()
           .describe(
             'Session ID representing the quarter/period, uses default if omitted',
+          ),
+        onlyMine: z
+          .boolean()
+          .optional()
+          .nullable()
+          .describe(
+            'Pass true to return only goals owned by the current user (resolves via /users/me)',
           ),
       }),
     },
@@ -188,6 +221,8 @@ export function createGoalTools(
             startDate: data.startDate,
             rockType: data.rockType,
             owner: data.rockOwner?.fullName,
+            ownerId: data.ownerId,
+            teamId: data.teamId,
             doneMilestones: data.doneMilestones,
             totalMilestones: data.totalMilestones,
             milestones,

@@ -5,6 +5,7 @@ import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { SimplamoClient } from '../../simplamo/simplamo.client';
+import { ToolCacheService } from '../cache/tool-cache.service';
 import { createActionTools } from './action.tools';
 import { ACTION_AGENT_PROMPT } from './action.prompts';
 
@@ -12,7 +13,7 @@ import { ACTION_AGENT_PROMPT } from './action.prompts';
 export class ActionAgentService {
   private agent: ReturnType<typeof createReactAgent>;
 
-  constructor(simplamo: SimplamoClient) {
+  constructor(simplamo: SimplamoClient, cache: ToolCacheService) {
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
       temperature: 0,
@@ -23,7 +24,7 @@ export class ActionAgentService {
 
     this.agent = createReactAgent({
       llm,
-      tools: createActionTools(simplamo),
+      tools: createActionTools(simplamo, cache),
       messageModifier: ACTION_AGENT_PROMPT,
     });
   }

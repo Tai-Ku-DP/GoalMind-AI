@@ -25,6 +25,11 @@ import {
   ScorecardTrendPayload,
   MetricItem,
 } from "./MetricCard";
+import {
+  TodoListView,
+  type TodoItem,
+  type TodoListPayload,
+} from "./TodoCard";
 import { useToolProgress } from "./goalmind-runtime";
 import { useState } from "react";
 
@@ -197,6 +202,11 @@ const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
   createAction:               { label: "Đang tạo công việc mới",             icon: "➕" },
   updateActionStatus:         { label: "Đang cập nhật công việc",            icon: "🔄" },
   parseNaturalDate:           { label: "Đang xử lý ngày tháng",              icon: "📅" },
+  listAllTodos:               { label: "Đang lấy danh sách todo",            icon: "📋" },
+  listTodosToday:             { label: "Đang lấy todo hôm nay",              icon: "🟡" },
+  listOverdueTodos:           { label: "Đang tìm todo trễ hạn",              icon: "🔴" },
+  createTodo:                 { label: "Đang tạo todo mới",                  icon: "➕" },
+  updateTodo:                 { label: "Đang cập nhật todo",                 icon: "🔄" },
 };
 
 // ─── Tool progress indicator (like Claude's "Searching...") ──────────────────
@@ -444,6 +454,33 @@ function NdjsonMetricTrendView({
   return <ScorecardTrendView payload={payload} />;
 }
 
+// todo-list: today or overdue todos streaming in
+function NdjsonTodoListView({
+  todos,
+  header,
+  isStreaming,
+}: {
+  todos: TodoItem[];
+  header: Record<string, unknown> | null;
+  isStreaming: boolean;
+}) {
+  if (!header) return isStreaming ? <ItemSkeleton /> : null;
+
+  const payload: TodoListPayload = {
+    type: (header.type as "today" | "overdue" | "all") ?? "all",
+    count: (header.count as number) ?? todos.length,
+    date: (header.date as string) ?? new Date().toISOString().split("T")[0],
+    todos,
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <TodoListView payload={payload} />
+      {isStreaming && <ItemSkeleton />}
+    </div>
+  );
+}
+
 // ─── Smart AssistantMessage ───────────────────────────────────────────────────
 // Rendering priority:
 //  ① No text yet              → AIThinkingSteps
@@ -520,6 +557,13 @@ function AssistantMessageContent() {
         {schema === "scorecard-trend" && (
           <NdjsonMetricTrendView
             metrics={items as MetricItem[]}
+            isStreaming={streaming}
+          />
+        )}
+        {schema === "todo-list" && (
+          <NdjsonTodoListView
+            todos={items as TodoItem[]}
+            header={header}
             isStreaming={streaming}
           />
         )}
