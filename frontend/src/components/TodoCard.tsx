@@ -2,11 +2,18 @@
 
 import React, { useState } from "react";
 import dayjs from "dayjs";
+import { ChevronUp, ChevronDown, Equal } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type TodoStatus = "NOT_STARTED" | "IN_PROGRESS" | "DONE";
-export type TodoPriority = "HIGH" | "MEDIUM" | "LOW";
+/** Đồng bộ với Simplamo: NOT_STARTED | PLAN | ON_TRACK | DONE */
+export type TodoStatus = "NOT_STARTED" | "PLAN" | "ON_TRACK" | "DONE";
+export type TodoPriority = "HIGH" | "MEDIUM" | "LOW" | "NONE";
+
+export interface TodoOwner {
+  fullName?: string;
+  avatar?: string;
+}
 
 export interface TodoItem {
   id: string;
@@ -15,6 +22,8 @@ export interface TodoItem {
   dueDate: string | null;
   priorityType: TodoPriority;
   description?: string;
+  owner?: TodoOwner;
+  isPrivated?: boolean;
 }
 
 export interface SuggestedAction {
@@ -25,59 +34,234 @@ export interface SuggestedAction {
   rockId?: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Status Icons (mirror Simplamo's IconStatusPlan / IconStatusOnTrack / CheckTick) ─────
+
+/** NOT_STARTED → vòng tròn rỗng (giống CheckTick isActive=false type="circle") */
+function IconNotStarted() {
+  return (
+    <span
+      title="Chưa bắt đầu"
+      style={{ display: "inline-flex", alignItems: "center" }}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle cx="9" cy="9" r="8" stroke="#D1D5DB" strokeWidth="1.5" />
+      </svg>
+    </span>
+  );
+}
+
+/** PLAN → hình vuông với chấm ở giữa (giống IconStatusPlan) */
+function IconPlan() {
+  return (
+    <span
+      title="Kế hoạch"
+      style={{ display: "inline-flex", alignItems: "center" }}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          x="1.5"
+          y="1.5"
+          width="15"
+          height="15"
+          rx="3.5"
+          stroke="#9CA3AF"
+          strokeWidth="1.5"
+        />
+        <rect x="6" y="6" width="6" height="6" rx="1.5" fill="#9CA3AF" />
+      </svg>
+    </span>
+  );
+}
+
+/** ON_TRACK → vòng tròn với phần tư fill + hiệu ứng xoay (giống IconStatusOnTrack) */
+function IconOnTrack() {
+  return (
+    <span
+      title="Đang thực hiện"
+      style={{ display: "inline-flex", alignItems: "center" }}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          animation: "spin-slow 3s linear infinite",
+        }}
+      >
+        <circle cx="9" cy="9" r="8" stroke="#F59E0B" strokeWidth="1.5" />
+        {/* 3/4 arc filled */}
+        <path
+          d="M9 9 L9 1 A8 8 0 1 1 1 9 Z"
+          fill="#F59E0B"
+          fillOpacity="0.25"
+        />
+        <circle cx="9" cy="1" r="2" fill="#F59E0B" />
+      </svg>
+      <style>{`
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
+    </span>
+  );
+}
+
+/** DONE → vòng tròn có dấu tick (giống CheckTick isActive=true type="circle") */
+function IconDone() {
+  return (
+    <span
+      title="Hoàn thành"
+      style={{ display: "inline-flex", alignItems: "center" }}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle cx="9" cy="9" r="9" fill="#22C55E" />
+        <path
+          d="M5.5 9.5L7.5 11.5L12.5 6.5"
+          stroke="white"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
+// ─── Priority Badge (giống Simplamo's PriorityType) ───────────────────────────
 
 const PRIORITY_CONFIG: Record<
   TodoPriority,
-  { label: string; color: string; dot: string }
+  {
+    label: string;
+    badgeColor: string;
+    icon: React.ReactNode;
+  }
 > = {
   HIGH: {
     label: "Cao",
-    color: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-    dot: "bg-red-500",
+    icon: <ChevronUp size={12} className="shrink-0 text-red-500" />,
+    badgeColor:
+      "bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800",
   },
   MEDIUM: {
     label: "TB",
-    color: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-    dot: "bg-amber-400",
+    icon: <Equal size={12} className="shrink-0 text-yellow-500" />,
+    badgeColor:
+      "bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
   },
   LOW: {
     label: "Thấp",
-    color: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-    dot: "bg-blue-400",
+    icon: <ChevronDown size={12} className="shrink-0 text-blue-500" />,
+    badgeColor:
+      "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800",
+  },
+  NONE: {
+    label: "",
+    icon: null,
+    badgeColor: "",
   },
 };
 
-const STATUS_CONFIG: Record<
-  TodoStatus,
-  { label: string; icon: string; color: string }
-> = {
-  NOT_STARTED: {
-    label: "Chưa bắt đầu",
-    icon: "○",
-    color: "text-gray-400",
-  },
-  IN_PROGRESS: {
-    label: "Đang làm",
-    icon: "◐",
-    color: "text-amber-500",
-  },
-  DONE: {
-    label: "Hoàn thành",
-    icon: "●",
-    color: "text-green-500",
-  },
-};
+/** Map status → icon component */
+function StatusIcon({ status }: { status: TodoStatus }) {
+  switch (status) {
+    case "DONE":
+      return <IconDone />;
+    case "ON_TRACK":
+      return <IconOnTrack />;
+    case "PLAN":
+      return <IconPlan />;
+    case "NOT_STARTED":
+    default:
+      return <IconNotStarted />;
+  }
+}
+
+function StatusLabel({ status }: { status: TodoStatus }) {
+  const map: Record<TodoStatus, { label: string; color: string }> = {
+    NOT_STARTED: { label: "Chưa bắt đầu", color: "text-gray-400" },
+    PLAN: { label: "Kế hoạch", color: "text-gray-500" },
+    ON_TRACK: { label: "Đang thực hiện", color: "text-amber-500" },
+    DONE: { label: "Hoàn thành", color: "text-green-500" },
+  };
+  const cfg = map[status] ?? map.NOT_STARTED;
+  return (
+    <span className={`text-[10px] font-medium ${cfg.color}`}>{cfg.label}</span>
+  );
+}
+
+// ─── Date helper ──────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("vi-VN", {
+  return new Date(iso).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
 }
+
+function isOverdue(iso: string | null, status: TodoStatus): boolean {
+  if (!iso || status === "DONE") return false;
+  return dayjs(iso).isBefore(dayjs(), "day");
+}
+
+// ─── Owner Avatar (mini, giống Simplamo AvatarOwner) ─────────────────────────
+
+function OwnerAvatar({
+  owner,
+}: {
+  owner?: { fullName?: string; avatar?: string };
+}) {
+  if (!owner) return null;
+  const initials = (owner.fullName ?? "?")
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <span
+      title={owner.fullName}
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-bold text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300 shrink-0 overflow-hidden border border-white dark:border-gray-700 shadow-sm"
+    >
+      {owner.avatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={owner.avatar}
+          alt={owner.fullName}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        initials
+      )}
+    </span>
+  );
+}
+
+// ─── API helper ───────────────────────────────────────────────────────────────
 
 async function apiCreateTodo(
   action: SuggestedAction,
@@ -104,7 +288,6 @@ async function apiCreateTodo(
 }
 
 // ─── Quick Create Action Button ───────────────────────────────────────────────
-// Nhận plain-text action từ AI, tạo Todo ngay với 1 click
 
 export function QuickCreateActionButton({
   rockId,
@@ -171,41 +354,71 @@ export function QuickCreateActionButton({
   );
 }
 
-// ─── Single Todo row ──────────────────────────────────────────────────────────
+// ─── Single Todo Row (giống Simplamo todo-item layout) ───────────────────────
+// Hiển thị thông tin, không có action (chỉ xem)
 
 export function TodoRow({ todo }: { todo: TodoItem }) {
-  const priority = PRIORITY_CONFIG[todo.priorityType] ?? PRIORITY_CONFIG.MEDIUM;
-  const status = STATUS_CONFIG[todo.status] ?? STATUS_CONFIG.NOT_STARTED;
+  const priority =
+    todo.priorityType !== "NONE"
+      ? PRIORITY_CONFIG[todo.priorityType] ?? PRIORITY_CONFIG.MEDIUM
+      : null;
+
+  const overdue = isOverdue(todo.dueDate, todo.status);
+  const isDone = todo.status === "DONE";
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      {/* Status icon */}
-      <span className={`mt-0.5 shrink-0 text-lg leading-none ${status.color}`}>
-        {status.icon}
+    <div
+      className={[
+        "group flex items-center gap-3 border-b px-4 py-3 transition-colors",
+        "bg-white dark:bg-gray-900",
+        "border-gray-100 dark:border-gray-800",
+        "hover:bg-gray-50/60 dark:hover:bg-gray-800/40",
+      ].join(" ")}
+    >
+      {/* ── Left: Status icon (giống PopoverStatuses > StatusItem) */}
+      <span className="shrink-0">
+        <StatusIcon status={todo.status} />
       </span>
 
-      {/* Content */}
+      {/* ── Center: Title + meta */}
       <div className="min-w-0 flex-1">
+        {/* Title */}
         <p
-          className={`text-sm font-medium leading-snug ${
-            todo.status === "DONE"
+          className={[
+            "text-sm font-medium leading-snug truncate",
+            isDone
               ? "line-through text-gray-400 dark:text-gray-500"
-              : "text-gray-900 dark:text-white"
-          }`}
+              : "text-gray-900 dark:text-white",
+          ].join(" ")}
         >
           {todo.title}
         </p>
+
+        {/* Description (1 line, muted) */}
         {todo.description && (
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
             {todo.description}
           </p>
         )}
-        <div className="mt-1.5 flex items-center gap-2">
-          {/* Due date */}
-          <span className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
+
+        {/* Meta row: status label · due date · priority */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {/* Status label */}
+          <StatusLabel status={todo.status} />
+
+          {/* Due date (giống DueDate component) */}
+          <span
+            className={[
+              "flex items-center gap-1 text-[11px]",
+              overdue
+                ? "text-red-500 font-medium"
+                : "text-gray-400 dark:text-gray-500",
+            ].join(" ")}
+          >
+            {/* Calendar icon */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-3 w-3"
+              className="h-3 w-3 shrink-0"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -216,25 +429,36 @@ export function TodoRow({ todo }: { todo: TodoItem }) {
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
+            {overdue && <span className="mr-0.5">⚠</span>}
             {fmtDate(todo.dueDate)}
           </span>
-          {/* Priority badge */}
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${priority.color}`}
-          >
-            {priority.label}
-          </span>
-          {/* Status label */}
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">
-            {status.label}
-          </span>
+
+          {/* Priority badge (giống PriorityType component) */}
+          {priority && priority.label && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${priority.badgeColor}`}
+            >
+              {priority.icon}
+              {priority.label}
+            </span>
+          )}
+
+          {/* Private badge */}
+          {todo.isPrivated && (
+            <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+              🔒 Riêng tư
+            </span>
+          )}
         </div>
       </div>
+
+      {/* ── Right: Owner avatar (giống AvatarOwner) */}
+      <OwnerAvatar owner={todo.owner} />
     </div>
   );
 }
 
-// ─── Suggested Action row (with "Tạo Todo" button) ───────────────────────────
+// ─── Suggested Action Row (with "Tạo Todo" button) ───────────────────────────
 
 export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">(
@@ -242,7 +466,9 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
   );
   const [errorMsg, setErrorMsg] = useState<string>("");
   const priority =
-    PRIORITY_CONFIG[action.priorityType] ?? PRIORITY_CONFIG.MEDIUM;
+    action.priorityType !== "NONE"
+      ? PRIORITY_CONFIG[action.priorityType] ?? PRIORITY_CONFIG.MEDIUM
+      : null;
 
   const handleCreate = async () => {
     setState("loading");
@@ -258,9 +484,11 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/20">
-      {/* Bullet */}
-      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400 dark:bg-blue-500" />
+    <div className="flex items-start gap-3 border-b border-blue-100/60 bg-blue-50/40 px-4 py-3 dark:border-blue-900/30 dark:bg-blue-950/10">
+      {/* Status icon: NOT_STARTED để gợi ý chưa tạo */}
+      <span className="shrink-0 mt-0.5">
+        <IconNotStarted />
+      </span>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
@@ -272,11 +500,11 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
             {action.description}
           </p>
         )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="flex items-center gap-1 text-[11px] text-gray-400">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-3 w-3"
+              className="h-3 w-3 shrink-0"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -289,11 +517,14 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
             </svg>
             {fmtDate(action.dueDate)}
           </span>
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${priority.color}`}
-          >
-            {priority.label}
-          </span>
+          {priority && priority.label && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${priority.badgeColor}`}
+            >
+              {priority.icon}
+              {priority.label}
+            </span>
+          )}
         </div>
         {state === "error" && (
           <p className="mt-1 text-[11px] text-red-500">{errorMsg}</p>
@@ -313,17 +544,13 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
               : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95",
         ].join(" ")}
       >
-        {state === "done"
-          ? "✅ Đã tạo"
-          : state === "loading"
-            ? "..."
-            : "➕ Tạo Todo"}
+        {state === "done" ? "✅ Đã tạo" : state === "loading" ? "..." : "➕ Tạo Todo"}
       </button>
     </div>
   );
 }
 
-// ─── Todo List view (today / overdue) ─────────────────────────────────────────
+// ─── Todo List View ───────────────────────────────────────────────────────────
 
 export interface TodoListPayload {
   type: "today" | "overdue" | "all";
@@ -364,9 +591,9 @@ export function TodoListView({ payload }: { payload: TodoListPayload }) {
   const cfg = headerConfig[type] ?? headerConfig.all;
 
   return (
-    <div className="flex flex-col gap-3 py-1">
+    <div className="flex flex-col py-1">
       {/* Header */}
-      <div className="flex items-center gap-2">
+      <div className="mb-2 flex items-center gap-2 px-4">
         <span
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${cfg.badgeColor}`}
         >
@@ -377,19 +604,21 @@ export function TodoListView({ payload }: { payload: TodoListPayload }) {
         </span>
       </div>
 
-      {/* Items */}
-      {todos.length === 0 ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {cfg.emptyMsg}
-        </p>
-      ) : (
-        todos.map((t) => <TodoRow key={t.id} todo={t} />)
-      )}
+      {/* Items — dạng table-item giống Simplamo */}
+      <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
+        {todos.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+            {cfg.emptyMsg}
+          </p>
+        ) : (
+          todos.map((t) => <TodoRow key={t.id} todo={t} />)
+        )}
+      </div>
     </div>
   );
 }
 
-// ─── Suggested Actions list ───────────────────────────────────────────────────
+// ─── Suggested Actions List ───────────────────────────────────────────────────
 
 export function SuggestedActionsView({
   actions,
@@ -398,13 +627,15 @@ export function SuggestedActionsView({
 }) {
   if (!actions.length) return null;
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+    <div className="flex flex-col gap-1 py-1">
+      <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
         Hành động gợi ý
       </p>
-      {actions.map((a, i) => (
-        <SuggestedActionRow key={i} action={a} />
-      ))}
+      <div className="overflow-hidden rounded-xl border border-blue-100 dark:border-blue-900/40 shadow-sm">
+        {actions.map((a, i) => (
+          <SuggestedActionRow key={i} action={a} />
+        ))}
+      </div>
     </div>
   );
 }
