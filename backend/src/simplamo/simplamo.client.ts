@@ -233,4 +233,30 @@ export class SimplamoClient implements ISimplamoClient {
     );
     return data;
   }
+  async createIssue(payload: {
+    title: string;
+    ownerId: string;
+    teamId: string;
+    companyId: string;
+    description?: string;
+    status?: 'PLAN' | 'ON_TRACK' | 'NOT_STARTED' | 'DONE';
+    interval?: 'SHORT_TERM' | 'LONG_TERM';
+  }): Promise<{ _id: string; title: string }> {
+    const { data } = await this.http.post<{ _id: string; title: string }>(
+      '/eos-core/issues',
+      {
+        ownerId: payload.ownerId,
+        teamId: payload.teamId,
+        companyId: payload.companyId,
+        title: payload.title,
+        status: payload.status ?? 'PLAN',
+        interval: payload.interval ?? 'SHORT_TERM',
+        description:
+          payload.description ??
+          '<p><strong>Nhận diện nguyên nhân cốt lõi:</strong></p><ul><li> </li></ul><p><strong>Bàn luận phương án:</strong></p><ul><li> </li></ul><p><strong>Chốt hành động:</strong></p><ul><li> </li></ul>',
+      },
+      { headers: { 'Content-Language': 'vi' } },
+    );
+    return data;
+  }
 }

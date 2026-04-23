@@ -11,6 +11,16 @@ import { SuggestedActionsView, QuickCreateActionButton, type SuggestedAction } f
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface PriorityAction {
+  urgency: "THIS_WEEK" | "TWO_WEEKS" | "MISSING_DATA";
+  text: string;
+}
+
+export interface DiscussionPoint {
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  text: string;
+}
+
 export type OffTrackSeverity = "CRITICAL" | "WARNING" | "ON_TRACK";
 
 export interface MetricItem {
@@ -52,6 +62,8 @@ export interface MetricItem {
   weeklyChangePct?: number | null;
   actions?: string[];
   suggestedActions?: SuggestedAction[];
+  priorityActions?: PriorityAction[];
+  discussionPoints?: DiscussionPoint[];
   trendLabel?: string;
   avgWeeklyChangePct?: number | null;
   history?: {
@@ -410,6 +422,209 @@ function HistoryBars({
   );
 }
 
+// ─── Quick Create Issue Button ──────────────────────────────────────────────
+
+function QuickCreateIssueButton({
+  issueTitle,
+  ownerId,
+}: {
+  issueTitle: string;
+  ownerId?: string;
+}) {
+  const [state, setState] = React.useState<"idle" | "loading" | "done" | "error">("idle");
+
+  const handleCreate = async () => {
+    setState("loading");
+    try {
+      const res = await fetch("/api/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: issueTitle,
+          ...(ownerId ? { ownerId } : {}),
+          interval: "SHORT_TERM",
+          status: "PLAN",
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(err.message ?? `HTTP ${res.status}`);
+      }
+      setState("done");
+    } catch {
+      setState("error");
+      setTimeout(() => setState("idle"), 3000);
+    }
+  };
+
+  if (state === "done") {
+    return (
+      <span className="shrink-0 rounded-lg bg-green-100 px-2.5 py-1 text-[10px] font-semibold text-green-700 dark:bg-green-950 dark:text-green-300">
+        ✅ Đã tạo
+      </span>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <span className="shrink-0 rounded-lg bg-red-100 px-2.5 py-1 text-[10px] font-semibold text-red-600 dark:bg-red-950 dark:text-red-300">
+        Lỗi
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleCreate}
+      disabled={state === "loading"}
+      className={[
+        "shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-95",
+        state === "loading"
+          ? "cursor-wait bg-gray-100 text-gray-400 dark:bg-gray-800"
+          : "bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-950/50 dark:text-orange-400 dark:hover:bg-orange-900/60",
+      ].join(" ")}
+    >
+      {state === "loading" ? "..." : "➕ Tạo Issue"}
+    </button>
+  );
+}
+
+// ─── Priority Actions Section ───────────────────────────────────────────────
+
+const URGENCY_CONFIG: Record<
+  PriorityAction["urgency"],
+  { dot: string; label: string; badge: string; priority: "HIGH" | "MEDIUM" | "LOW" }
+> = {
+  THIS_WEEK: {
+    dot: "bg-red-500",
+    label: "Tuần này",
+    badge: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
+    priority: "HIGH",
+  },
+  TWO_WEEKS: {
+    dot: "bg-amber-400",
+    label: "2 tuần tới",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+    priority: "MEDIUM",
+  },
+  MISSING_DATA: {
+    dot: "bg-blue-400",
+    label: "Dữ liệu thiếu",
+    badge: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300",
+    priority: "LOW",
+  },
+};
+
+function PriorityActionsSection({
+  actions,
+  ownerId,
+}: {
+  actions: PriorityAction[];
+  ownerId?: string;
+}) {
+  if (!actions.length) return null;
+  return (
+    <div className="mt-4">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-700 dark:text-gray-300 mb-1.5">
+        Hành động Ưu tiên
+      </p>
+      <ul className="mt-1 space-y-0">
+        {actions.map((action, i) => {
+          const cfg = URGENCY_CONFIG[action.urgency] ?? URGENCY_CONFIG.TWO_WEEKS;
+          return (
+            <li
+              key={i}
+              className="flex items-start gap-2 border-b border-gray-100 py-2 last:border-none dark:border-gray-800"
+            >
+              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
+              <span className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badge}`}>
+                {cfg.label}
+              </span>
+              <span className="flex-1 text-xs text-gray-700 dark:text-gray-300">
+                {action.text}
+              </span>
+              {action.urgency !== "MISSING_DATA" && (
+                <QuickCreateActionButton
+                  actionText={action.text}
+                  ownerId={ownerId}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ─── Discussion Points Section ────────────────────────────────────────────────
+
+const SEVERITY_CONFIG: Record<
+  DiscussionPoint["severity"],
+  { dot: string; label: string; badge: string }
+> = {
+  CRITICAL: {
+    dot: "bg-red-500",
+    label: "CRITICAL",
+    badge: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
+  },
+  HIGH: {
+    dot: "bg-orange-500",
+    label: "HIGH",
+    badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
+  },
+  MEDIUM: {
+    dot: "bg-amber-400",
+    label: "MEDIUM",
+    badge: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-300",
+  },
+  LOW: {
+    dot: "bg-gray-400",
+    label: "LOW",
+    badge: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+  },
+};
+
+function DiscussionPointsSection({
+  points,
+  ownerId,
+}: {
+  points: DiscussionPoint[];
+  ownerId?: string;
+}) {
+  if (!points.length) return null;
+  return (
+    <div className="mt-4">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-700 dark:text-gray-300 mb-1.5">
+        Vấn đề Cần Thảo luận
+      </p>
+      <ul className="mt-1 space-y-0">
+        {points.map((point, i) => {
+          const cfg = SEVERITY_CONFIG[point.severity] ?? SEVERITY_CONFIG.MEDIUM;
+          return (
+            <li
+              key={i}
+              className="flex items-start gap-2 border-b border-gray-100 py-2 last:border-none dark:border-gray-800"
+            >
+              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
+              <span className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badge}`}>
+                {cfg.label}
+              </span>
+              <span className="flex-1 text-xs text-gray-700 dark:text-gray-300">
+                {point.text}
+              </span>
+              <QuickCreateIssueButton
+                issueTitle={point.text}
+                ownerId={ownerId}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 // ─── Single MetricCard ────────────────────────────────────────────────────────
 
 export function MetricCard({ metric }: { metric: MetricItem }) {
@@ -553,36 +768,27 @@ export function MetricCard({ metric }: { metric: MetricItem }) {
         </div>
       </div>
 
-      {/* Plain text actions */}
-      {metric.actions && metric.actions.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-            Hành động đề xuất
-          </p>
-          <ol className="mt-2 space-y-2">
-            {metric.actions.map((action, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2.5"
-              >
-                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-500 dark:bg-gray-800">
-                  {i + 1}
-                </span>
-                <span className="flex-1 text-xs leading-relaxed text-gray-700 dark:text-gray-300">
-                  {action}
-                </span>
-                <QuickCreateActionButton actionText={action} ownerId={metric.ownerId} />
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
       {/* Suggested actions with "Tạo Todo" button */}
       {metric.suggestedActions && metric.suggestedActions.length > 0 && (
         <div className="mt-4">
           <SuggestedActionsView actions={metric.suggestedActions} />
         </div>
+      )}
+
+      {/* Priority Actions (scorecard-trend) */}
+      {metric.priorityActions && metric.priorityActions.length > 0 && (
+        <PriorityActionsSection
+          actions={metric.priorityActions}
+          ownerId={metric.ownerId}
+        />
+      )}
+
+      {/* Discussion Points (scorecard-trend) */}
+      {metric.discussionPoints && metric.discussionPoints.length > 0 && (
+        <DiscussionPointsSection
+          points={metric.discussionPoints}
+          ownerId={metric.ownerId}
+        />
       )}
 
       {/* Goal Advanced Stats (tab-based) */}

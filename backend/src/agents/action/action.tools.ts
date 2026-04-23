@@ -65,14 +65,16 @@ export function createActionTools(
 ) {
   // ── 1. List today's todos ──────────────────────────────────────────────────
   const listTodosToday = tool(
-    async () => {
+    async ({ onlyMine }) => {
       try {
-        const currentUserId = await resolveCurrentUserId(client, cache);
+        const currentUserId = onlyMine
+          ? await resolveCurrentUserId(client, cache)
+          : null;
         const todos = await client.listTodos({ teamId: TEAM_ID });
         const today = todayISO();
         const filtered = todos.filter(
           (t) =>
-            isOwnedBy(t, currentUserId) &&
+            (!onlyMine || (currentUserId && isOwnedBy(t, currentUserId))) &&
             t.dueDate &&
             isoDateOnly(t.dueDate) === today &&
             t.status !== 'DONE',
@@ -94,19 +96,32 @@ export function createActionTools(
     {
       name: 'listTodosToday',
       description: `Lấy danh sách todo hôm nay — tất cả todo có dueDate là ngày hôm nay.
-        Gọi khi user hỏi "hôm nay tôi có việc gì", "todo hôm nay", "công việc hôm nay".`,
-      schema: z.object({}),
+        Gọi khi user hỏi "hôm nay có việc gì", "todo hôm nay", "công việc hôm nay".
+        Nếu onlyMine=true thì chỉ trả về todo của user hiện tại, ngược lại trả về toàn bộ.`,
+      schema: z.object({
+        onlyMine: z
+          .boolean()
+          .optional()
+          .nullable()
+          .describe(
+            'true: chỉ lấy todo của tôi; false/omit: lấy todo của toàn bộ team',
+          ),
+      }),
     },
   );
 
   // ── 2. List ALL todos ─────────────────────────────────────────────────────
   const listAllTodos = tool(
-    async () => {
+    async ({ onlyMine }) => {
       try {
-        const currentUserId = await resolveCurrentUserId(client, cache);
+        const currentUserId = onlyMine
+          ? await resolveCurrentUserId(client, cache)
+          : null;
         const todos = await client.listTodos({ teamId: TEAM_ID });
         const today = todayISO();
-        const filtered = todos.filter((t) => isOwnedBy(t, currentUserId));
+        const filtered = onlyMine
+          ? todos.filter((t) => currentUserId && isOwnedBy(t, currentUserId))
+          : todos;
 
         const ndjsonHeader = JSON.stringify({
           _ndjson: 'todo-list',
@@ -124,21 +139,32 @@ export function createActionTools(
     {
       name: 'listAllTodos',
       description: `Lấy toàn bộ danh sách todo trong team (không lọc theo ngày).
-        Gọi khi user hỏi "tất cả todo", "liệt kê todo", "danh sách công việc", "show all todos".`,
-      schema: z.object({}),
+        Gọi khi user hỏi "tất cả todo", "liệt kê todo", "danh sách công việc", "show all todos".
+        Nếu onlyMine=true thì chỉ trả về todo của user hiện tại.`,
+      schema: z.object({
+        onlyMine: z
+          .boolean()
+          .optional()
+          .nullable()
+          .describe(
+            'true: chỉ lấy todo của tôi; false/omit: lấy todo của toàn bộ team',
+          ),
+      }),
     },
   );
 
   // ── 4. List overdue todos ──────────────────────────────────────────────────
   const listOverdueTodos = tool(
-    async () => {
+    async ({ onlyMine }) => {
       try {
-        const currentUserId = await resolveCurrentUserId(client, cache);
+        const currentUserId = onlyMine
+          ? await resolveCurrentUserId(client, cache)
+          : null;
         const todos = await client.listTodos({ teamId: TEAM_ID });
         const today = todayISO();
         const filtered = todos.filter(
           (t) =>
-            isOwnedBy(t, currentUserId) &&
+            (!onlyMine || (currentUserId && isOwnedBy(t, currentUserId))) &&
             t.dueDate &&
             isoDateOnly(t.dueDate) < today &&
             t.status !== 'DONE',
@@ -160,8 +186,17 @@ export function createActionTools(
     {
       name: 'listOverdueTodos',
       description: `Tìm các todo trễ hạn — dueDate < hôm nay và status != DONE.
-        Gọi khi user hỏi "trễ hạn", "quá hạn", "overdue", "chưa làm mà đã qua hạn".`,
-      schema: z.object({}),
+        Gọi khi user hỏi "trễ hạn", "quá hạn", "overdue", "chưa làm mà đã qua hạn".
+        Nếu onlyMine=true thì chỉ trả về todo của user hiện tại.`,
+      schema: z.object({
+        onlyMine: z
+          .boolean()
+          .optional()
+          .nullable()
+          .describe(
+            'true: chỉ lấy todo của tôi; false/omit: lấy todo của toàn bộ team',
+          ),
+      }),
     },
   );
 

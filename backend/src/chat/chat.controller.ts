@@ -55,6 +55,30 @@ export class ChatController {
     return { success: true, todo: updated };
   }
 
+  /** Quick-create an issue — called from the FE "Tạo Issue" button in DiscussionPointsSection */
+  @Post('issues')
+  async createIssue(
+    @Body()
+    body: {
+      title: string;
+      ownerId?: string;
+      description?: string;
+      interval?: 'SHORT_TERM' | 'LONG_TERM';
+      status?: 'PLAN' | 'ON_TRACK' | 'NOT_STARTED' | 'DONE';
+    },
+  ) {
+    const created = await this.simplamo.createIssue({
+      title: body.title,
+      ownerId: body.ownerId || OWNER_ID,
+      teamId: TEAM_ID,
+      companyId: '60fd7f693e81570057440b4e',
+      description: body.description,
+      interval: body.interval ?? 'SHORT_TERM',
+      status: body.status ?? 'PLAN',
+    });
+    return { success: true, issue: created };
+  }
+
   @Post('chat')
   async chat(@Body() body: { message: string }, @Res() res: Response) {
     res.setHeader('Content-Type', 'text/event-stream');
