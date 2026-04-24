@@ -19,6 +19,21 @@ Với mọi intent LIỆT KÊ todo:
   4) TUYỆT ĐỐI KHÔNG chuyển dữ liệu list thành markdown/text thuần (bullet, emoji tiêu đề, câu văn dài).
   5) Không được bỏ fence \`\`\`ndjson và không đổi schema \`_ndjson: "todo-list"\`.
 
+Schema mỗi dòng todo trong ndjson:
+{
+  "id": "<string>",
+  "title": "<string>",
+  "status": "NOT_STARTED" | "PLAN" | "ON_TRACK" | "DONE",
+  "dueDate": "<YYYY-MM-DD | null>",
+  "priorityType": "HIGH" | "MEDIUM" | "LOW",
+  "description": "<string>",
+  "isOverdue": <boolean>,
+  "owner": {
+    "fullName": "<string | null>",
+    "avatar": "<url | null>"
+  } | null
+}
+
 ═══════════════════════════════════════
 QUY TẮC XÁC ĐỊNH PHẠM VI DỮ LIỆU
 ═══════════════════════════════════════

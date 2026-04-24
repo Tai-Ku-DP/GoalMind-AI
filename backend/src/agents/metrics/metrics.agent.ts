@@ -7,6 +7,7 @@ import { SimplamoClient } from '../../simplamo/simplamo.client';
 import { createMetricsTools } from './metrics.tools';
 import { METRICS_AGENT_PROMPT } from './metrics.prompts';
 import { ToolCacheService } from '../cache/tool-cache.service';
+import { SessionContextService } from '../../session/session-context.service';
 
 @Injectable()
 export class MetricsAgentService {
@@ -16,6 +17,7 @@ export class MetricsAgentService {
     private readonly simplamo: SimplamoClient,
     private readonly config: ConfigService,
     private readonly cache: ToolCacheService,
+    private readonly sessionCtx: SessionContextService,
   ) {
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
@@ -26,7 +28,12 @@ export class MetricsAgentService {
     });
     this.agent = createReactAgent({
       llm,
-      tools: createMetricsTools(simplamo, config, cache),
+      tools: createMetricsTools(
+        simplamo,
+        config,
+        cache,
+        () => sessionCtx.teamId ?? '',
+      ),
       messageModifier: METRICS_AGENT_PROMPT,
     });
   }

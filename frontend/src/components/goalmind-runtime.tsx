@@ -94,6 +94,10 @@ export function GoalMindRuntimeProvider({
   const clearHistory = useCallback(async () => {
     setMessages([]);
     await clearSession(SESSION_ID).catch(() => {});
+    // Reset backend session so team selection starts fresh
+    await fetch(`${API_URL}/api/session/reset`, { method: "POST" }).catch(
+      () => {},
+    );
   }, []);
 
   // ── Send a new message ─────────────────────────────────────────────────────

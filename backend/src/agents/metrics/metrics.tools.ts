@@ -361,12 +361,15 @@ export function createMetricsTools(
   client: SimplamoClient,
   config: ConfigService,
   cache: ToolCacheService,
+  getTeamId?: () => string,
 ) {
   const defaultTeamId = config.get<string>(
     'SIMPLAMO_TEAM_ID',
-    // '60fd7f693e81570057440b4f',
     '60fe00f28ae1ac0057c5422c',
   );
+
+  /** Resolve teamId at call-time: prefer SessionContext → fall back to .env */
+  const resolveTeamId = () => getTeamId?.() || defaultTeamId;
 
   async function resolveCurrentUserId(): Promise<string> {
     const cached = cache.get<{ _id: string }>(CURRENT_USER_CACHE_KEY);
@@ -398,7 +401,7 @@ export function createMetricsTools(
   // ── Tool 1: getScorecardMetrics ─────────────────────────────────────────────
   const getScorecardMetrics = tool(
     async ({ teamId, interval, onlyMine }) => {
-      const tid = teamId || defaultTeamId;
+      const tid = teamId || resolveTeamId();
       const baseKey = `scorecardMetrics:${tid}:${interval ?? 13}`;
       const cacheKey = onlyMine ? `${baseKey}:mine` : baseKey;
       const cached = cache.get<string>(cacheKey);
@@ -469,7 +472,7 @@ export function createMetricsTools(
   // ── Tool 2: getOffTrackScorecardMetrics ────────────────────────────────────
   const getOffTrackScorecardMetrics = tool(
     async ({ teamId, severityFilter, onlyMine }) => {
-      const tid = teamId || defaultTeamId;
+      const tid = teamId || resolveTeamId();
       const baseKey = `offtrackMetrics:${tid}:${severityFilter ?? 'all'}`;
       const cacheKey = onlyMine ? `${baseKey}:mine` : baseKey;
       const cached = cache.get<string>(cacheKey);
@@ -556,7 +559,7 @@ export function createMetricsTools(
   // ── Tool 3: getScorecardTrend ──────────────────────────────────────────────
   const getScorecardTrend = tool(
     async ({ teamId, metricId, includeRollup }) => {
-      const tid = teamId || defaultTeamId;
+      const tid = teamId || resolveTeamId();
       const cacheKey = `scorecardTrend:${tid}:${metricId}:${includeRollup ? 'rollup' : 'norollup'}`;
       const cached = cache.get<string>(cacheKey);
       if (cached) return cached;
@@ -604,7 +607,7 @@ export function createMetricsTools(
           const yearStart = new Date(now.getFullYear(), 0, 1);
 
           const calcResult = await client.getScorecardMetricCalculation(
-            teamId || defaultTeamId,
+            teamId || resolveTeamId(),
             'weekly',
             [
               { type: 'monthly', date: monthStart.toISOString() },

@@ -1,18 +1,52 @@
-import { Controller, Post, Body, Res, Patch, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Res,
+  Patch,
+  Param,
+  HttpCode,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ChatService } from './chat.service';
 import { SimplamoClient } from '../simplamo/simplamo.client';
+import { SessionContextService } from '../session/session-context.service';
+import { ConfigService } from '@nestjs/config';
 import type { ICreateTodoPayload, IUpdateTodoPayload } from '../simplamo/types';
 
-const TEAM_ID = '60fe00f28ae1ac0057c5422c';
-const OWNER_ID = '60fe95b903bf3600570a70ea';
+const DEFAULT_OWNER_ID = '60fe95b903bf3600570a70ea';
+const DEFAULT_COMPANY_ID = '60fd7f693e81570057440b4e';
+const DEFAULT_TEAM_ID = '60fe00f28ae1ac0057c5422c';
 
 @Controller('api')
 export class ChatController {
+  private readonly ownerId: string;
+  private readonly companyId: string;
+  private readonly fallbackTeamId: string;
+
   constructor(
     private readonly chatService: ChatService,
     private readonly simplamo: SimplamoClient,
-  ) {}
+    private readonly sessionCtx: SessionContextService,
+    private readonly config: ConfigService,
+  ) {
+    this.ownerId = this.config.get<string>(
+      'SIMPLAMO_OWNER_ID',
+      DEFAULT_OWNER_ID,
+    );
+    this.companyId = this.config.get<string>(
+      'SIMPLAMO_COMPANY_ID',
+      DEFAULT_COMPANY_ID,
+    );
+    this.fallbackTeamId = this.config.get<string>(
+      'SIMPLAMO_TEAM_ID',
+      DEFAULT_TEAM_ID,
+    );
+  }
+
+  private get teamId(): string {
+    return this.sessionCtx.teamId ?? this.fallbackTeamId;
+  }
 
   /** Quick-create a todo — called directly from the FE "Tạo nhanh" button */
   @Post('todos')
@@ -28,8 +62,8 @@ export class ChatController {
     },
   ) {
     const payload: ICreateTodoPayload = {
-      teamId: TEAM_ID,
-      ownerId: body.ownerId || OWNER_ID,
+      teamId: this.teamId,
+      ownerId: body.ownerId || this.ownerId,
       title: body.title,
       status: 'NOT_STARTED',
       description: body.description ?? '',
@@ -48,8 +82,8 @@ export class ChatController {
     @Body() body: IUpdateTodoPayload,
   ) {
     const updated = await this.simplamo.updateTodo(todoId, {
-      ownerId: OWNER_ID,
-      teamId: TEAM_ID,
+      ownerId: this.ownerId,
+      teamId: this.teamId,
       ...body,
     });
     return { success: true, todo: updated };
@@ -69,9 +103,9 @@ export class ChatController {
   ) {
     const created = await this.simplamo.createIssue({
       title: body.title,
-      ownerId: body.ownerId || OWNER_ID,
-      teamId: TEAM_ID,
-      companyId: '60fd7f693e81570057440b4e',
+      ownerId: body.ownerId || this.ownerId,
+      teamId: this.teamId,
+      companyId: this.companyId,
       description: body.description,
       interval: body.interval ?? 'SHORT_TERM',
       status: body.status ?? 'PLAN',
@@ -108,5 +142,16 @@ export class ChatController {
       res.write('data: [DONE]\n\n');
       res.end();
     }
+  }
+
+  /**
+   * Reset backend session — called when user clears chat history.
+   * Clears team selection and pending intent so the next message starts fresh.
+   */
+  @Post('session/reset')
+  @HttpCode(200)
+  resetSession() {
+    this.sessionCtx.resetTeam();
+    return { success: true };
   }
 }

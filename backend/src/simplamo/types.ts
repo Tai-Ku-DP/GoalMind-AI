@@ -12,11 +12,6 @@ export interface ISimplamoClient {
   listRocks(params: IParamsListRocks): Promise<IRock[]>;
   getRockDetail(rockId: string): Promise<IRock>;
   updateRockStatus(params: IPramsUpdateRockStatus): Promise<IRock>;
-  listMetrics(params?: { teamId?: string }): Promise<any>;
-  getMetricValues(
-    metricId: string,
-    params?: { from?: string; to?: string },
-  ): Promise<any>;
 }
 
 export type IParamsListRocks = {
@@ -38,6 +33,13 @@ export type IPramsUpdateRockStatus = {
 export type ITodoStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE' | 'ON_TRACK';
 export type ITodoPriority = 'HIGH' | 'MEDIUM' | 'LOW' | '';
 
+export interface ITodoOwner {
+  _id: string;
+  email?: string;
+  fullName?: string;
+  avatar?: string;
+}
+
 export interface ITodo {
   _id: string;
   title: string;
@@ -46,6 +48,7 @@ export interface ITodo {
   priorityType: ITodoPriority;
   teamId: string;
   ownerId: string;
+  owner?: ITodoOwner;
   description?: string;
   isArchived?: boolean;
   isOverduedate?: number;

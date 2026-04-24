@@ -5,7 +5,7 @@ import { SimplamoClient } from '../../simplamo/simplamo.client';
 import { ToolCacheService } from '../cache/tool-cache.service';
 import type { ITodo } from '../../simplamo/types';
 
-const TEAM_ID = '60fe00f28ae1ac0057c5422c';
+const DEFAULT_TEAM_ID = '60fe00f28ae1ac0057c5422c';
 const CURRENT_USER_CACHE_KEY = 'currentUser';
 
 function isoDateOnly(iso: string): string {
@@ -41,6 +41,12 @@ function mapTodo(t: ITodo) {
     priorityType: normalizePriority(t.priorityType),
     description: t.description ?? '',
     isOverdue: !!t.isOverduedate,
+    owner: t.owner
+      ? {
+          fullName: t.owner.fullName ?? null,
+          avatar: t.owner.avatar ?? null,
+        }
+      : null,
   };
 }
 
@@ -62,7 +68,9 @@ function isOwnedBy(todo: ITodo, userId: string): boolean {
 export function createActionTools(
   client: SimplamoClient,
   cache: ToolCacheService,
+  getTeamId?: () => string,
 ) {
+  const resolveTeamId = () => getTeamId?.() || DEFAULT_TEAM_ID;
   // ── 1. List today's todos ──────────────────────────────────────────────────
   const listTodosToday = tool(
     async ({ onlyMine }) => {
@@ -70,7 +78,7 @@ export function createActionTools(
         const currentUserId = onlyMine
           ? await resolveCurrentUserId(client, cache)
           : null;
-        const todos = await client.listTodos({ teamId: TEAM_ID });
+        const todos = await client.listTodos({ teamId: resolveTeamId() });
         const today = todayISO();
         const filtered = todos.filter(
           (t) =>
@@ -117,7 +125,7 @@ export function createActionTools(
         const currentUserId = onlyMine
           ? await resolveCurrentUserId(client, cache)
           : null;
-        const todos = await client.listTodos({ teamId: TEAM_ID });
+        const todos = await client.listTodos({ teamId: resolveTeamId() });
         const today = todayISO();
         const filtered = onlyMine
           ? todos.filter((t) => currentUserId && isOwnedBy(t, currentUserId))
@@ -160,7 +168,7 @@ export function createActionTools(
         const currentUserId = onlyMine
           ? await resolveCurrentUserId(client, cache)
           : null;
-        const todos = await client.listTodos({ teamId: TEAM_ID });
+        const todos = await client.listTodos({ teamId: resolveTeamId() });
         const today = todayISO();
         const filtered = todos.filter(
           (t) =>
@@ -207,7 +215,7 @@ export function createActionTools(
         const currentUserId = await resolveCurrentUserId(client, cache);
         const created = await client.createTodos([
           {
-            teamId: TEAM_ID,
+            teamId: resolveTeamId(),
             ownerId: currentUserId,
             title,
             status: 'NOT_STARTED',
@@ -274,7 +282,7 @@ export function createActionTools(
             ? { priorityType }
             : {}),
           ownerId: currentUserId,
-          teamId: TEAM_ID,
+          teamId: resolveTeamId(),
         });
 
         return JSON.stringify({

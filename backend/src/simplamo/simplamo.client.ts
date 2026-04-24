@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import axios, { AxiosInstance } from 'axios';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -64,7 +67,36 @@ export class SimplamoClient implements ISimplamoClient {
     return data;
   }
 
-  // ── Rocks (Goals) ──
+  // ── Teams ──
+
+  async listTeams(
+    companyId: string,
+  ): Promise<
+    Array<{ _id: string; name: string; companyId: string; isPrivate: boolean }>
+  > {
+    const { data } = await this.http.get<
+      Array<{
+        _id: string;
+        name: string;
+        companyId: string;
+        isPrivate: boolean;
+      }>
+    >('/company/teams', {
+      params: { filter: JSON.stringify({ order: 'isLeaderShip DESC' }) },
+    });
+    const list = Array.isArray(data)
+      ? data
+      : ((data as { data?: unknown[] }).data ?? []);
+    return (
+      list as Array<{
+        _id: string;
+        name: string;
+        companyId: string;
+        isPrivate: boolean;
+      }>
+    ).filter((t) => (!companyId || t.companyId === companyId) && !t.isPrivate);
+  }
+
   async listRocks(params: IParamsListRocks): Promise<IRock[]> {
     const { data } = await this.http.get<IRock[]>('/eos-core/rocks', {
       params,
@@ -131,53 +163,6 @@ export class SimplamoClient implements ISimplamoClient {
       '/eos-core/score-cards/metric-calculation',
       { teamId, periodInterval, payload },
     );
-    return data;
-  }
-
-  // ── Legacy metric endpoints (kept for backward compat) ──
-
-  async listMetrics(params?: { teamId?: string }) {
-    const { data } = await this.http.get('/eos-core/metrics', { params });
-    return data;
-  }
-
-  async getMetricValues(
-    metricId: string,
-    params?: { from?: string; to?: string },
-  ) {
-    const { data } = await this.http.get(
-      `/eos-core/metrics/${metricId}/values`,
-      { params },
-    );
-    return data;
-  }
-
-  // ── Actions (Todos / Issues) ──
-
-  async listActions(params?: {
-    goalId?: string;
-    status?: string;
-    teamId?: string;
-  }) {
-    const { data } = await this.http.get('/eos-core/actions', { params });
-    return data;
-  }
-
-  async createAction(payload: {
-    title: string;
-    goalId?: string;
-    dueDate?: string;
-    priority?: string;
-    owner?: string;
-  }) {
-    const { data } = await this.http.post('/eos-core/actions', payload);
-    return data;
-  }
-
-  async updateActionStatus(actionId: string, done: boolean) {
-    const { data } = await this.http.patch(`/eos-core/actions/${actionId}`, {
-      done,
-    });
     return data;
   }
 

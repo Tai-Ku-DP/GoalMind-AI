@@ -25,11 +25,7 @@ import {
   ScorecardTrendPayload,
   MetricItem,
 } from "./MetricCard";
-import {
-  TodoListView,
-  type TodoItem,
-  type TodoListPayload,
-} from "./TodoCard";
+import { TodoListView, type TodoItem, type TodoListPayload } from "./TodoCard";
 import { useToolProgress } from "./goalmind-runtime";
 import { useState } from "react";
 
@@ -37,7 +33,8 @@ import { useState } from "react";
 // Renders AI text with full markdown support: **bold**, *italic*, lists, etc.
 function MarkdownContent({ text }: { text: string }) {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none
+    <div
+      className="prose prose-sm dark:prose-invert max-w-none
         prose-p:my-1 prose-p:leading-relaxed
         prose-strong:font-semibold
         prose-ul:my-1 prose-ul:pl-4
@@ -45,7 +42,8 @@ function MarkdownContent({ text }: { text: string }) {
         prose-li:my-0.5
         prose-code:rounded prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:text-xs dark:prose-code:bg-gray-800
         prose-hr:my-2
-        text-gray-800 dark:text-gray-200">
+        text-gray-800 dark:text-gray-200"
+    >
       <ReactMarkdown>{text}</ReactMarkdown>
     </div>
   );
@@ -111,9 +109,7 @@ function StepRow({ step }: { step: ThinkingStep }) {
     <div
       className={[
         "flex items-center gap-2.5 text-sm transition-opacity duration-300",
-        step.status === "pending"
-          ? "opacity-40"
-          : "opacity-100",
+        step.status === "pending" ? "opacity-40" : "opacity-100",
       ].join(" ")}
     >
       {step.status === "active" && <Spinner />}
@@ -124,8 +120,8 @@ function StepRow({ step }: { step: ThinkingStep }) {
           step.status === "done"
             ? "text-gray-500 line-through dark:text-gray-500"
             : step.status === "active"
-            ? "font-medium text-blue-700 dark:text-blue-300"
-            : "text-gray-400 dark:text-gray-600"
+              ? "font-medium text-blue-700 dark:text-blue-300"
+              : "text-gray-400 dark:text-gray-600"
         }
       >
         {step.label}
@@ -159,8 +155,8 @@ function AIThinkingSteps() {
   const step2: StepStatus = !step1Finished
     ? "pending"
     : contentStarted
-    ? "done"
-    : "active";
+      ? "done"
+      : "active";
   const step3: StepStatus = contentStarted ? "active" : "pending";
 
   const steps: ThinkingStep[] = [
@@ -171,11 +167,7 @@ function AIThinkingSteps() {
 
   // Sequential reveal: step N becomes visible only after step N-1 is done
   const visibleUpTo =
-    step1 === "done" && step2 === "done"
-      ? 3
-      : step1 === "done"
-      ? 2
-      : 1;
+    step1 === "done" && step2 === "done" ? 3 : step1 === "done" ? 2 : 1;
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/30">
@@ -189,24 +181,30 @@ function AIThinkingSteps() {
 // ─── Tool label map ───────────────────────────────────────────────────────────
 
 const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
-  listGoals:                  { label: "Đang lấy danh sách mục tiêu",       icon: "🎯" },
-  getGoalDetail:              { label: "Đang phân tích chi tiết goal",       icon: "🔍" },
-  updateGoalStatus:           { label: "Đang cập nhật trạng thái goal",      icon: "✏️" },
-  getScorecardMetrics:        { label: "Đang tải toàn bộ chỉ số Scorecard",  icon: "📊" },
-  getOffTrackScorecardMetrics:{ label: "Đang tìm chỉ số lệch mục tiêu",     icon: "⚠️" },
-  getScorecardTrend:          { label: "Đang phân tích xu hướng chỉ số",     icon: "📈" },
-  listMetrics:                { label: "Đang lấy danh sách chỉ số",          icon: "📊" },
-  getMetricValues:            { label: "Đang đọc số liệu chỉ số",            icon: "📈" },
-  getTeamScorecard:           { label: "Đang tải scorecard nhóm",            icon: "🏆" },
-  listActions:                { label: "Đang lấy danh sách công việc",       icon: "✅" },
-  createAction:               { label: "Đang tạo công việc mới",             icon: "➕" },
-  updateActionStatus:         { label: "Đang cập nhật công việc",            icon: "🔄" },
-  parseNaturalDate:           { label: "Đang xử lý ngày tháng",              icon: "📅" },
-  listAllTodos:               { label: "Đang lấy danh sách todo",            icon: "📋" },
-  listTodosToday:             { label: "Đang lấy todo hôm nay",              icon: "🟡" },
-  listOverdueTodos:           { label: "Đang tìm todo trễ hạn",              icon: "🔴" },
-  createTodo:                 { label: "Đang tạo todo mới",                  icon: "➕" },
-  updateTodo:                 { label: "Đang cập nhật todo",                 icon: "🔄" },
+  listGoals: { label: "Đang lấy danh sách mục tiêu", icon: "🎯" },
+  getGoalDetail: { label: "Đang phân tích chi tiết goal", icon: "🔍" },
+  updateGoalStatus: { label: "Đang cập nhật trạng thái goal", icon: "✏️" },
+  getScorecardMetrics: {
+    label: "Đang tải toàn bộ chỉ số Scorecard",
+    icon: "📊",
+  },
+  getOffTrackScorecardMetrics: {
+    label: "Đang tìm chỉ số lệch mục tiêu",
+    icon: "⚠️",
+  },
+  getScorecardTrend: { label: "Đang phân tích xu hướng chỉ số", icon: "📈" },
+  listMetrics: { label: "Đang lấy danh sách chỉ số", icon: "📊" },
+  getMetricValues: { label: "Đang đọc số liệu chỉ số", icon: "📈" },
+  getTeamScorecard: { label: "Đang tải scorecard nhóm", icon: "🏆" },
+  listActions: { label: "Đang lấy danh sách công việc", icon: "✅" },
+  createAction: { label: "Đang tạo công việc mới", icon: "➕" },
+  updateActionStatus: { label: "Đang cập nhật công việc", icon: "🔄" },
+  parseNaturalDate: { label: "Đang xử lý ngày tháng", icon: "📅" },
+  listAllTodos: { label: "Đang lấy danh sách todo", icon: "📋" },
+  listTodosToday: { label: "Đang lấy todo hôm nay", icon: "🟡" },
+  listOverdueTodos: { label: "Đang tìm todo trễ hạn", icon: "🔴" },
+  createTodo: { label: "Đang tạo todo mới", icon: "➕" },
+  updateTodo: { label: "Đang cập nhật todo", icon: "🔄" },
 };
 
 // ─── Tool progress indicator (like Claude's "Searching...") ──────────────────
@@ -219,13 +217,17 @@ function ToolProgressIndicator({ tool }: { tool: string | null }) {
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-2.5 dark:border-blue-900 dark:bg-blue-950/40">
       <span className="text-base">{icon}</span>
-      <span className="text-sm text-blue-700 dark:text-blue-300">{label}...</span>
+      <span className="text-sm text-blue-700 dark:text-blue-300">
+        {label}...
+      </span>
       <span className="ml-auto flex gap-1">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
             className="h-1.5 w-1.5 rounded-full bg-blue-400 dark:bg-blue-500"
-            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+            style={{
+              animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+            }}
           />
         ))}
       </span>
@@ -256,54 +258,81 @@ interface NdjsonBlock {
   schema: string | null;
   header: Record<string, unknown> | null;
   items: unknown[];
-  preText: string;
-  postText: string;
   isClosed: boolean;
 }
 
-function parseNdjsonBlock(rawText: string): NdjsonBlock | null {
+// A parsed segment is either plain text or an ndjson block
+type Segment =
+  | { kind: "text"; content: string }
+  | ({ kind: "ndjson" } & NdjsonBlock);
+
+/**
+ * Parses ALL ```ndjson ... ``` blocks from a raw message text.
+ * Returns an ordered list of segments (text | ndjson) so the renderer
+ * can handle multiple metric cards emitted in a single message.
+ */
+function parseAllSegments(rawText: string): Segment[] | null {
   const FENCE = "```ndjson";
-  const startIdx = rawText.indexOf(FENCE);
-  if (startIdx === -1) return null;
+  if (!rawText.includes(FENCE)) return null;
 
-  const afterFence = rawText.slice(startIdx + FENCE.length);
-  const closeIdx = afterFence.indexOf("```");
-  const isClosed = closeIdx >= 0;
-  const blockContent = isClosed ? afterFence.slice(0, closeIdx) : afterFence;
+  const segments: Segment[] = [];
+  let cursor = 0;
 
-  const preText = rawText.slice(0, startIdx).trim();
-  const postText = isClosed ? afterFence.slice(closeIdx + 3).trim() : "";
-
-  // While streaming, the last line might be incomplete → skip it.
-  const rawLines = blockContent.split("\n");
-  const candidateLines = (isClosed ? rawLines : rawLines.slice(0, -1))
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  let header: Record<string, unknown> | null = null;
-  const items: unknown[] = [];
-
-  for (const line of candidateLines) {
-    try {
-      const obj = JSON.parse(line) as Record<string, unknown>;
-      if ("_ndjson" in obj) {
-        header = obj;
-      } else {
-        items.push(obj);
-      }
-    } catch {
-      // partial or malformed line — skip
+  while (cursor < rawText.length) {
+    const startIdx = rawText.indexOf(FENCE, cursor);
+    if (startIdx === -1) {
+      // Remaining text after last block
+      const tail = rawText.slice(cursor).trim();
+      if (tail) segments.push({ kind: "text", content: tail });
+      break;
     }
+
+    // Text before this block
+    const before = rawText.slice(cursor, startIdx).trim();
+    if (before) segments.push({ kind: "text", content: before });
+
+    const afterFence = rawText.slice(startIdx + FENCE.length);
+    const closeIdx = afterFence.indexOf("```");
+    const isClosed = closeIdx >= 0;
+    const blockContent = isClosed ? afterFence.slice(0, closeIdx) : afterFence;
+
+    // Parse ndjson lines
+    const rawLines = blockContent.split("\n");
+    const candidateLines = (isClosed ? rawLines : rawLines.slice(0, -1))
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    let header: Record<string, unknown> | null = null;
+    const items: unknown[] = [];
+
+    for (const line of candidateLines) {
+      try {
+        const obj = JSON.parse(line) as Record<string, unknown>;
+        if ("_ndjson" in obj) {
+          header = obj;
+        } else {
+          items.push(obj);
+        }
+      } catch {
+        // partial or malformed — skip
+      }
+    }
+
+    segments.push({
+      kind: "ndjson",
+      schema: header ? (header._ndjson as string) : null,
+      header,
+      items,
+      isClosed,
+    });
+
+    // Advance cursor past this block (or to end if still streaming)
+    cursor = isClosed
+      ? startIdx + FENCE.length + closeIdx + 3
+      : rawText.length;
   }
 
-  return {
-    schema: header ? (header._ndjson as string) : null,
-    header,
-    items,
-    preText,
-    postText,
-    isClosed,
-  };
+  return segments.length > 0 ? segments : null;
 }
 
 // Single skeleton for the "next card loading" slot
@@ -481,6 +510,29 @@ function NdjsonTodoListView({
   );
 }
 
+// ─── Inline Thinking Indicator ──────────────────────────────────────────────
+// Hiển thị khi đã có text nhưng AI vẫn đang gọi tool (e.g. sau "✅ Đã chọn team...")
+function InlineThinkingIndicator({ tool }: { tool: string | null }) {
+  const info = tool ? TOOL_LABELS[tool] : null;
+  const label = info?.label ?? "Đang xử lý";
+  const icon = info?.icon ?? "⚙️";
+  return (
+    <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+      <span className="text-base leading-none">{icon}</span>
+      <span>{label}...</span>
+      <span className="flex gap-0.5">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="inline-block h-1.5 w-1.5 rounded-full bg-blue-400 dark:bg-blue-500"
+            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
 // ─── Smart AssistantMessage ───────────────────────────────────────────────────
 // Rendering priority:
 //  ① No text yet              → AIThinkingSteps
@@ -512,62 +564,80 @@ function AssistantMessageContent() {
           <span
             key={i}
             className="h-2 w-2 rounded-full bg-gray-400 dark:bg-gray-500"
-            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+            style={{
+              animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+            }}
           />
         ))}
       </span>
     );
   }
 
-  // ② NDJSON block — renders each card the moment its line arrives
-  const ndjsonBlock = parseNdjsonBlock(rawText);
-  if (ndjsonBlock) {
-    const { schema, header, items, preText, postText, isClosed } = ndjsonBlock;
-    const streaming = !isClosed;
+  // ② NDJSON segments — handles ONE or MULTIPLE ndjson blocks in a single message
+  const segments = parseAllSegments(rawText);
+  if (segments) {
+    // Show inline thinking when streaming and waiting for next ndjson block
+    const lastSeg = segments[segments.length - 1];
+    const lastBlockOpen = lastSeg?.kind === "ndjson" && !lastSeg.isClosed;
+    const showThinking =
+      isStreaming &&
+      !lastBlockOpen &&
+      (activeTool !== null || toolEverEnded);
     return (
       <div className="flex flex-col gap-3">
-        {preText && <MarkdownContent text={preText} />}
-        {schema === "goal-list" && (
-          <NdjsonGoalListView
-            rocks={items as GoalListRock[]}
-            header={header}
-            isStreaming={streaming}
-          />
-        )}
-        {schema === "goal-detail" && (
-          <NdjsonGoalDetailView
-            goals={items as GoalData[]}
-            isStreaming={streaming}
-          />
-        )}
-        {schema === "scorecard-overview" && (
-          <NdjsonMetricOverviewView
-            metrics={items as MetricItem[]}
-            header={header}
-            isStreaming={streaming}
-          />
-        )}
-        {schema === "scorecard-offtrack" && (
-          <NdjsonMetricOfftrackView
-            metrics={items as MetricItem[]}
-            header={header}
-            isStreaming={streaming}
-          />
-        )}
-        {schema === "scorecard-trend" && (
-          <NdjsonMetricTrendView
-            metrics={items as MetricItem[]}
-            isStreaming={streaming}
-          />
-        )}
-        {schema === "todo-list" && (
-          <NdjsonTodoListView
-            todos={items as TodoItem[]}
-            header={header}
-            isStreaming={streaming}
-          />
-        )}
-        {postText && <MarkdownContent text={postText} />}
+        {segments.map((seg, idx) => {
+          if (seg.kind === "text") {
+            return <MarkdownContent key={idx} text={seg.content} />;
+          }
+          // ndjson block
+          const { schema, header, items, isClosed } = seg;
+          const streaming = !isClosed;
+          return (
+            <div key={idx} className="flex flex-col gap-3">
+              {schema === "goal-list" && (
+                <NdjsonGoalListView
+                  rocks={items as GoalListRock[]}
+                  header={header}
+                  isStreaming={streaming}
+                />
+              )}
+              {schema === "goal-detail" && (
+                <NdjsonGoalDetailView
+                  goals={items as GoalData[]}
+                  isStreaming={streaming}
+                />
+              )}
+              {schema === "scorecard-overview" && (
+                <NdjsonMetricOverviewView
+                  metrics={items as MetricItem[]}
+                  header={header}
+                  isStreaming={streaming}
+                />
+              )}
+              {schema === "scorecard-offtrack" && (
+                <NdjsonMetricOfftrackView
+                  metrics={items as MetricItem[]}
+                  header={header}
+                  isStreaming={streaming}
+                />
+              )}
+              {schema === "scorecard-trend" && (
+                <NdjsonMetricTrendView
+                  metrics={items as MetricItem[]}
+                  isStreaming={streaming}
+                />
+              )}
+              {schema === "todo-list" && (
+                <NdjsonTodoListView
+                  todos={items as TodoItem[]}
+                  header={header}
+                  isStreaming={streaming}
+                />
+              )}
+            </div>
+          );
+        })}
+        {showThinking && <InlineThinkingIndicator tool={activeTool} />}
       </div>
     );
   }
@@ -620,7 +690,17 @@ function AssistantMessageContent() {
     }
   }
 
-  // ⑤ Pure text → markdown
+  // ⑤ Pure text → markdown (+ inline thinking if tools still running)
+  const showInlineThinking =
+    isStreaming && (activeTool !== null || toolEverEnded);
+  if (showInlineThinking) {
+    return (
+      <div className="flex flex-col gap-2">
+        <MarkdownContent text={rawText} />
+        <InlineThinkingIndicator tool={activeTool} />
+      </div>
+    );
+  }
   return <MarkdownContent text={rawText} />;
 }
 
@@ -640,7 +720,7 @@ function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="flex justify-start px-4 py-2">
       <div className="flex w-full max-w-[80%] gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-sm text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-purple-600 text-sm text-white">
           AI
         </div>
         <div className="min-w-0 flex-1 rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100">
@@ -694,7 +774,7 @@ function EmptyState() {
   return (
     <ThreadPrimitive.Empty>
       <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-3xl text-white shadow-lg">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-purple-600 text-3xl text-white shadow-lg">
           🎯
         </div>
         <div>
@@ -793,7 +873,7 @@ export function ChatUI() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-3 border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-gray-950">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-lg text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-purple-600 text-lg text-white">
           🎯
         </div>
         <div className="flex-1">

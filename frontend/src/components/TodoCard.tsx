@@ -227,7 +227,7 @@ function isOverdue(iso: string | null, status: TodoStatus): boolean {
   return dayjs(iso).isBefore(dayjs(), "day");
 }
 
-// ─── Owner Avatar (mini, giống Simplamo AvatarOwner) ─────────────────────────
+// ─── Owner Avatar + Name (mini chip, giống Simplamo AvatarOwner) ─────────────
 
 function OwnerAvatar({
   owner,
@@ -242,20 +242,34 @@ function OwnerAvatar({
     .join("")
     .toUpperCase();
 
+  // Lấy firstName (từ cuối) để hiển thị ngắn gọn
+  const displayName = owner.fullName
+    ? owner.fullName.split(" ").pop() ?? owner.fullName
+    : null;
+
   return (
     <span
       title={owner.fullName}
-      className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-bold text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300 shrink-0 overflow-hidden border border-white dark:border-gray-700 shadow-sm"
+      className="inline-flex items-center gap-1.5 shrink-0"
     >
-      {owner.avatar ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={owner.avatar}
-          alt={owner.fullName}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        initials
+      {/* Avatar circle */}
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-bold text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300 shrink-0 overflow-hidden border border-white dark:border-gray-700 shadow-sm">
+        {owner.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={owner.avatar}
+            alt={owner.fullName}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          initials
+        )}
+      </span>
+      {/* Full name */}
+      {displayName && (
+        <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 truncate max-w-[80px]">
+          {displayName}
+        </span>
       )}
     </span>
   );
@@ -360,7 +374,7 @@ export function QuickCreateActionButton({
 export function TodoRow({ todo }: { todo: TodoItem }) {
   const priority =
     todo.priorityType !== "NONE"
-      ? PRIORITY_CONFIG[todo.priorityType] ?? PRIORITY_CONFIG.MEDIUM
+      ? (PRIORITY_CONFIG[todo.priorityType] ?? PRIORITY_CONFIG.MEDIUM)
       : null;
 
   const overdue = isOverdue(todo.dueDate, todo.status);
@@ -467,7 +481,7 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
   const [errorMsg, setErrorMsg] = useState<string>("");
   const priority =
     action.priorityType !== "NONE"
-      ? PRIORITY_CONFIG[action.priorityType] ?? PRIORITY_CONFIG.MEDIUM
+      ? (PRIORITY_CONFIG[action.priorityType] ?? PRIORITY_CONFIG.MEDIUM)
       : null;
 
   const handleCreate = async () => {
@@ -544,7 +558,11 @@ export function SuggestedActionRow({ action }: { action: SuggestedAction }) {
               : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95",
         ].join(" ")}
       >
-        {state === "done" ? "✅ Đã tạo" : state === "loading" ? "..." : "➕ Tạo Todo"}
+        {state === "done"
+          ? "✅ Đã tạo"
+          : state === "loading"
+            ? "..."
+            : "➕ Tạo Todo"}
       </button>
     </div>
   );

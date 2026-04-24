@@ -8,12 +8,17 @@ import { SimplamoClient } from '../../simplamo/simplamo.client';
 import { ToolCacheService } from '../cache/tool-cache.service';
 import { createActionTools } from './action.tools';
 import { ACTION_AGENT_PROMPT } from './action.prompts';
+import { SessionContextService } from '../../session/session-context.service';
 
 @Injectable()
 export class ActionAgentService {
   private agent: ReturnType<typeof createReactAgent>;
 
-  constructor(simplamo: SimplamoClient, cache: ToolCacheService) {
+  constructor(
+    simplamo: SimplamoClient,
+    cache: ToolCacheService,
+    private readonly sessionCtx: SessionContextService,
+  ) {
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
       temperature: 0,
@@ -24,7 +29,7 @@ export class ActionAgentService {
 
     this.agent = createReactAgent({
       llm,
-      tools: createActionTools(simplamo, cache),
+      tools: createActionTools(simplamo, cache, () => sessionCtx.teamId ?? ''),
       messageModifier: ACTION_AGENT_PROMPT,
     });
   }
