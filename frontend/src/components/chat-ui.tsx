@@ -27,7 +27,38 @@ import {
 } from "./MetricCard";
 import { TodoListView, type TodoItem, type TodoListPayload } from "./TodoCard";
 import { useToolProgress } from "./goalmind-runtime";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
+// ─── useElapsedSeconds ───────────────────────────────────────────────────────────────
+// Seconds stored as state, only mutated inside async setInterval (never synchronously
+// in the effect body) — satisfies both react-hooks/set-state-in-effect and the
+// no-impure-in-render rules.
+function useElapsedSeconds(active: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      startRef.current = null;
+      return;
+    }
+    startRef.current = Date.now();
+    const id = setInterval(() => {
+      // Inside interval callback → async, not synchronous in effect body ✓
+      const start = startRef.current;
+      if (start !== null) {
+        setSeconds(Math.floor((Date.now() - start) / 1000));
+      }
+    }, 1000);
+    return () => {
+      clearInterval(id);
+      // Reset on cleanup so old value doesn't flash on next activation
+      setSeconds(0);
+    };
+  }, [active]);
+
+  return seconds;
+}
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 // Renders AI text with full markdown support: **bold**, *italic*, lists, etc.
@@ -130,7 +161,7 @@ function StepRow({ step }: { step: ThinkingStep }) {
   );
 }
 
-function AIThinkingSteps() {
+function AIThinkingSteps({ elapsedSeconds }: { elapsedSeconds: number }) {
   const { activeTool, toolEverEnded, contentStarted } = useToolProgress();
 
   // ── Derive per-step status from SSE event flags ──────────────────────────
@@ -171,9 +202,19 @@ function AIThinkingSteps() {
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/30">
-      {steps.slice(0, visibleUpTo).map((step, i) => (
-        <StepRow key={i} step={step} />
-      ))}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2.5">
+          {steps.slice(0, visibleUpTo).map((step, i) => (
+            <StepRow key={i} step={step} />
+          ))}
+        </div>
+        {/* Elapsed seconds counter */}
+        {elapsedSeconds > 0 && (
+          <span className="ml-4 shrink-0 self-start rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-blue-500 dark:bg-blue-900/50 dark:text-blue-300">
+            {elapsedSeconds}s
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -327,9 +368,7 @@ function parseAllSegments(rawText: string): Segment[] | null {
     });
 
     // Advance cursor past this block (or to end if still streaming)
-    cursor = isClosed
-      ? startIdx + FENCE.length + closeIdx + 3
-      : rawText.length;
+    cursor = isClosed ? startIdx + FENCE.length + closeIdx + 3 : rawText.length;
   }
 
   return segments.length > 0 ? segments : null;
@@ -512,7 +551,13 @@ function NdjsonTodoListView({
 
 // ─── Inline Thinking Indicator ──────────────────────────────────────────────
 // Hiển thị khi đã có text nhưng AI vẫn đang gọi tool (e.g. sau "✅ Đã chọn team...")
-function InlineThinkingIndicator({ tool }: { tool: string | null }) {
+function InlineThinkingIndicator({
+  tool,
+  elapsedSeconds,
+}: {
+  tool: string | null;
+  elapsedSeconds: number;
+}) {
   const info = tool ? TOOL_LABELS[tool] : null;
   const label = info?.label ?? "Đang xử lý";
   const icon = info?.icon ?? "⚙️";
@@ -525,10 +570,18 @@ function InlineThinkingIndicator({ tool }: { tool: string | null }) {
           <span
             key={i}
             className="inline-block h-1.5 w-1.5 rounded-full bg-blue-400 dark:bg-blue-500"
-            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+            style={{
+              animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+            }}
           />
         ))}
       </span>
+      {/* Elapsed seconds */}
+      {elapsedSeconds > 0 && (
+        <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-blue-500 dark:bg-blue-900/50 dark:text-blue-300">
+          {elapsedSeconds}s
+        </span>
+      )}
     </div>
   );
 }
@@ -551,11 +604,14 @@ function AssistantMessageContent() {
 
   const isStreaming = message.status?.type === "running";
 
+  // Count elapsed seconds for the entire streaming duration
+  const elapsedSeconds = useElapsedSeconds(isStreaming);
+
   // ① Nothing received yet
   if (isStreaming && !rawText) {
     // Only show fake steps when tools are actually being called
     if (activeTool !== null || toolEverEnded) {
-      return <AIThinkingSteps />;
+      return <AIThinkingSteps elapsedSeconds={elapsedSeconds} />;
     }
     // Normal conversational question — just show a minimal typing indicator
     return (
@@ -580,9 +636,7 @@ function AssistantMessageContent() {
     const lastSeg = segments[segments.length - 1];
     const lastBlockOpen = lastSeg?.kind === "ndjson" && !lastSeg.isClosed;
     const showThinking =
-      isStreaming &&
-      !lastBlockOpen &&
-      (activeTool !== null || toolEverEnded);
+      isStreaming && !lastBlockOpen && (activeTool !== null || toolEverEnded);
     return (
       <div className="flex flex-col gap-3">
         {segments.map((seg, idx) => {
@@ -637,7 +691,12 @@ function AssistantMessageContent() {
             </div>
           );
         })}
-        {showThinking && <InlineThinkingIndicator tool={activeTool} />}
+        {showThinking && (
+          <InlineThinkingIndicator
+            tool={activeTool}
+            elapsedSeconds={elapsedSeconds}
+          />
+        )}
       </div>
     );
   }
@@ -697,7 +756,10 @@ function AssistantMessageContent() {
     return (
       <div className="flex flex-col gap-2">
         <MarkdownContent text={rawText} />
-        <InlineThinkingIndicator tool={activeTool} />
+        <InlineThinkingIndicator
+          tool={activeTool}
+          elapsedSeconds={elapsedSeconds}
+        />
       </div>
     );
   }

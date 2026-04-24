@@ -155,8 +155,35 @@ export class OrchestratorService {
   }
 
   // ── Intent Classification ──────────────────────────────────────────────────
+  // Priority: keyword regex (zero latency) → LLM fallback (only if ambiguous)
+
+  private classifyIntentByKeyword(message: string): Intent | null {
+    const m = message.toLowerCase();
+
+    // ── ACTION keywords ──────────────────────────────────────────────────────
+    const actionRx =
+      /\b(todo|hành động|danh sách hành động|công việc|việc cần làm|task|issue|tạo việc|tạo todo|cập nhật todo|trễ hạn|quá hạn|overdue|hôm nay tôi có|liệt kê.*todo|liệt kê.*hành động)\b/;
+    if (actionRx.test(m)) return 'action';
+
+    // ── METRICS keywords ─────────────────────────────────────────────────────
+    const metricsRx =
+      /\b(scorecard|kpi|chỉ số|metric|off.?track|on.?track|doanh thu|doanh số|tỷ lệ|xu hướng|trend|phân tích.*chỉ số|chỉ số nào|số liệu|hiệu suất|target|mục tiêu.*số)\b/;
+    if (metricsRx.test(m)) return 'metrics';
+
+    // ── GOAL keywords ────────────────────────────────────────────────────────
+    const goalRx =
+      /\b(rock|goal|mục tiêu|okr|tiến độ|milestone|quarter|q[1-4]|thành tích|hoàn thành|phân tích.*goal|phân tích.*rock|danh sách.*goal|danh sách.*rock|liệt kê.*goal|liệt kê.*rock)\b/;
+    if (goalRx.test(m)) return 'goal';
+
+    return null; // không match → fallback LLM
+  }
 
   private async classifyIntent(message: string): Promise<Intent> {
+    // Fast path: keyword matching (no LLM call)
+    const byKeyword = this.classifyIntentByKeyword(message);
+    if (byKeyword) return byKeyword;
+
+    // Slow path: LLM fallback for ambiguous messages
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
       temperature: 0,
