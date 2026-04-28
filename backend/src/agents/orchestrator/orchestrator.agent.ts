@@ -38,7 +38,7 @@ export class OrchestratorService {
     );
   }
 
-  async *stream(message: string): AsyncGenerator<string> {
+  async *stream(message: string, apiKey: string): AsyncGenerator<string> {
     const trimmed = message.trim();
 
     // ── "đổi team" → reset và bắt đầu lại flow chọn team ──
@@ -50,7 +50,7 @@ export class OrchestratorService {
 
     // ── Đang chờ user chọn team ──
     if (this.sessionCtx.pendingTeamSelection) {
-      yield* this.handleTeamInput(trimmed);
+      yield* this.handleTeamInput(trimmed, apiKey);
       return;
     }
 
@@ -58,7 +58,7 @@ export class OrchestratorService {
     if (!this.sessionCtx.hasTeam()) {
       // Classify intent ngay để lưu lại (chỉ khi không phải câu ngắn chung)
       if (!CONTINUATION_PATTERN.test(trimmed)) {
-        const intent = await this.classifyIntent(trimmed);
+        const intent = await this.classifyIntent(trimmed, apiKey);
         this.lastIntent = intent;
         // Lưu pending intent để sau khi chọn team sẽ tự route
         if (intent !== 'general') {
@@ -72,19 +72,19 @@ export class OrchestratorService {
     // ── Đã có team → route đến agent như bình thường ──
     const intent = CONTINUATION_PATTERN.test(trimmed)
       ? this.lastIntent
-      : await this.classifyIntent(trimmed);
+      : await this.classifyIntent(trimmed, apiKey);
 
     this.lastIntent = intent;
 
     switch (intent) {
       case 'goal':
-        yield* this.goalAgent.stream(trimmed);
+        yield* this.goalAgent.stream(trimmed, apiKey);
         break;
       case 'metrics':
-        yield* this.metricsAgent.stream(trimmed);
+        yield* this.metricsAgent.stream(trimmed, apiKey);
         break;
       case 'action':
-        yield* this.actionAgent.stream(trimmed);
+        yield* this.actionAgent.stream(trimmed, apiKey);
         break;
       default:
         yield `Bạn đang làm việc với team **${this.sessionCtx.teamName}**.\n\nTôi có thể giúp bạn về:\n- 🎯 **Goals** — Mục tiêu, Rocks, OKR\n- 📊 **Metrics** — Chỉ số, Scorecard, KPI\n- ✅ **Actions** — Todo, công việc cần làm\n\nHoặc gõ **"đổi team"** để chọn team khác.`;
@@ -113,7 +113,10 @@ export class OrchestratorService {
     }
   }
 
-  private async *handleTeamInput(input: string): AsyncGenerator<string> {
+  private async *handleTeamInput(
+    input: string,
+    apiKey: string,
+  ): AsyncGenerator<string> {
     const team = this.sessionCtx.resolveTeamFromInput(input);
 
     if (!team) {
@@ -137,13 +140,13 @@ export class OrchestratorService {
         | 'general';
       switch (pending.intent) {
         case 'goal':
-          yield* this.goalAgent.stream(pending.message);
+          yield* this.goalAgent.stream(pending.message, apiKey);
           break;
         case 'metrics':
-          yield* this.metricsAgent.stream(pending.message);
+          yield* this.metricsAgent.stream(pending.message, apiKey);
           break;
         case 'action':
-          yield* this.actionAgent.stream(pending.message);
+          yield* this.actionAgent.stream(pending.message, apiKey);
           break;
         default:
           yield `Bạn đang làm việc với team **${team.name}**.\n\nTôi có thể giúp bạn về:\n- 🎯 **Goals** — Mục tiêu, Rocks, OKR\n- 📊 **Metrics** — Chỉ số, Scorecard, KPI\n- ✅ **Actions** — Todo, công việc cần làm`;
@@ -178,7 +181,7 @@ export class OrchestratorService {
     return null; // không match → fallback LLM
   }
 
-  private async classifyIntent(message: string): Promise<Intent> {
+  private async classifyIntent(message: string, apiKey: string): Promise<Intent> {
     // Fast path: keyword matching (no LLM call)
     const byKeyword = this.classifyIntentByKeyword(message);
     if (byKeyword) return byKeyword;
@@ -187,7 +190,7 @@ export class OrchestratorService {
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
       temperature: 0,
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      openAIApiKey: apiKey,
       configuration: { baseURL: process.env.OPENAI_BASE_URL },
       streamUsage: false,
     });

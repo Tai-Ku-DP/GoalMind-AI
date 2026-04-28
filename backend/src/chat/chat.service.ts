@@ -5,7 +5,7 @@ import { OrchestratorService } from '../agents/orchestrator/orchestrator.agent';
 export class ChatService {
   constructor(private readonly orchestrator: OrchestratorService) {}
 
-  async *stream(message: string): AsyncGenerator<string> {
-    yield* this.orchestrator.stream(message);
+  async *stream(message: string, apiKey: string): AsyncGenerator<string> {
+    yield* this.orchestrator.stream(message, apiKey);
   }
 }

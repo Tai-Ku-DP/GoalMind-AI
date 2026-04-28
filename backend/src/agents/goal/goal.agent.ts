@@ -17,31 +17,30 @@ const THREAD_ID = 'goal-session-default';
 
 @Injectable()
 export class GoalAgentService {
-  private agent: ReturnType<typeof createReactAgent>;
+  private readonly checkpointSaver = new MemorySaver();
 
   constructor(
     private readonly simplamo: SimplamoClient,
     private readonly config: ConfigService,
     private readonly cache: ToolCacheService,
-  ) {
+  ) {}
+
+  async *stream(message: string, apiKey: string): AsyncGenerator<string> {
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
       temperature: 0,
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      openAIApiKey: apiKey,
       configuration: { baseURL: process.env.OPENAI_BASE_URL },
       streamUsage: false,
       maxRetries: 0,
     });
-    this.agent = createReactAgent({
+    const agent = createReactAgent({
       llm,
-      tools: createGoalTools(simplamo, config, cache),
+      tools: createGoalTools(this.simplamo, this.config, this.cache),
       messageModifier: GOAL_AGENT_PROMPT,
-      checkpointSaver: new MemorySaver(),
+      checkpointSaver: this.checkpointSaver,
     });
-  }
-
-  async *stream(message: string): AsyncGenerator<string> {
-    const eventStream = this.agent.streamEvents(
+    const eventStream = agent.streamEvents(
       { messages: [new HumanMessage(message)] },
       { version: 'v2', configurable: { thread_id: THREAD_ID } },
     );

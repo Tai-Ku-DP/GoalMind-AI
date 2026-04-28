@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Post,
   Body,
@@ -6,6 +7,8 @@ import {
   Patch,
   Param,
   HttpCode,
+  Headers,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ChatService } from './chat.service';
@@ -13,6 +16,13 @@ import { SimplamoClient } from '../simplamo/simplamo.client';
 import { SessionContextService } from '../session/session-context.service';
 import { ConfigService } from '@nestjs/config';
 import type { ICreateTodoPayload, IUpdateTodoPayload } from '../simplamo/types';
+import { IsString, MinLength } from 'class-validator';
+
+class ValidateOpenAIKeyBody {
+  @IsString()
+  @MinLength(20)
+  apiKey!: string;
+}
 
 const DEFAULT_OWNER_ID = '60fe95b903bf3600570a70ea';
 const DEFAULT_COMPANY_ID = '60fd7f693e81570057440b4e';
@@ -114,7 +124,24 @@ export class ChatController {
   }
 
   @Post('chat')
-  async chat(@Body() body: { message: string }, @Res() res: Response) {
+  async chat(
+    @Body() body: { message: string },
+    @Headers('x-openai-api-key') apiKey: string | undefined,
+    @Res() res: Response,
+  ) {
+    if (!apiKey?.trim()) {
+      throw new UnauthorizedException(
+        'Thiếu API key. Vui lòng xác thực OPENAI_API_KEY trước.',
+      );
+    }
+    const trimmedApiKey = apiKey.trim();
+    const keyValid = await this.validateOpenAIKey(trimmedApiKey);
+    if (!keyValid) {
+      throw new UnauthorizedException(
+        'OPENAI_API_KEY không hợp lệ hoặc đã hết hạn.',
+      );
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -122,7 +149,10 @@ export class ChatController {
     res.flushHeaders();
 
     try {
-      for await (const chunk of this.chatService.stream(body.message)) {
+      for await (const chunk of this.chatService.stream(
+        body.message,
+        trimmedApiKey,
+      )) {
         if (chunk.startsWith('\x00TOOL_START:') && chunk.endsWith('\x00')) {
           const tool = chunk.slice(12, -1);
           res.write(
@@ -144,6 +174,22 @@ export class ChatController {
     }
   }
 
+  @Post('auth/validate-openai-key')
+  @HttpCode(200)
+  async validateKey(@Body() body: ValidateOpenAIKeyBody) {
+    const apiKey = body.apiKey?.trim();
+    if (!apiKey) {
+      throw new BadRequestException('OPENAI_API_KEY không được để trống.');
+    }
+
+    const isValid = await this.validateOpenAIKey(apiKey);
+    if (!isValid) {
+      throw new UnauthorizedException('OPENAI_API_KEY không hợp lệ.');
+    }
+
+    return { success: true };
+  }
+
   /**
    * Reset backend session — called when user clears chat history.
    * Clears team selection and pending intent so the next message starts fresh.
@@ -153,5 +199,22 @@ export class ChatController {
   resetSession() {
     this.sessionCtx.resetTeam();
     return { success: true };
+  }
+
+  private async validateOpenAIKey(apiKey: string): Promise<boolean> {
+    if (process.env.OPENAI_API_KEY === apiKey) {
+      return true; // Allow the default key for validation to avoid locking users out
+    }
+
+    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/models`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 }

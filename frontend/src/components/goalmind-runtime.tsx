@@ -25,6 +25,15 @@ import {
 
 const SESSION_ID = "default";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const OPENAI_KEY_COOKIE_NAME = "goalmind_openai_api_key";
+
+const getCookieValue = (name: string): string => {
+  if (typeof document === "undefined") return "";
+  const cookies = document.cookie ? document.cookie.split("; ") : [];
+  const prefix = `${name}=`;
+  const found = cookies.find((cookie) => cookie.startsWith(prefix));
+  return found ? decodeURIComponent(found.slice(prefix.length)) : "";
+};
 
 // ─── Tool Progress Context ────────────────────────────────────────────────────
 
@@ -114,7 +123,13 @@ export function GoalMindRuntimeProvider({
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-openai-api-key":
+            typeof window !== "undefined"
+              ? getCookieValue(OPENAI_KEY_COOKIE_NAME)
+              : "",
+        },
         body: JSON.stringify({ message: input }),
       });
 

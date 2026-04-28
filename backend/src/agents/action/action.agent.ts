@@ -12,30 +12,30 @@ import { SessionContextService } from '../../session/session-context.service';
 
 @Injectable()
 export class ActionAgentService {
-  private agent: ReturnType<typeof createReactAgent>;
-
   constructor(
-    simplamo: SimplamoClient,
-    cache: ToolCacheService,
+    private readonly simplamo: SimplamoClient,
+    private readonly cache: ToolCacheService,
     private readonly sessionCtx: SessionContextService,
-  ) {
+  ) {}
+
+  async *stream(message: string, apiKey: string): AsyncGenerator<string> {
     const llm = new ChatOpenAI({
       model: 'gpt-5.3-codex',
       temperature: 0,
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      openAIApiKey: apiKey,
       configuration: { baseURL: process.env.OPENAI_BASE_URL },
       streamUsage: false,
     });
-
-    this.agent = createReactAgent({
+    const agent = createReactAgent({
       llm,
-      tools: createActionTools(simplamo, cache, () => sessionCtx.teamId ?? ''),
+      tools: createActionTools(
+        this.simplamo,
+        this.cache,
+        () => this.sessionCtx.teamId ?? '',
+      ),
       messageModifier: ACTION_AGENT_PROMPT,
     });
-  }
-
-  async *stream(message: string): AsyncGenerator<string> {
-    const eventStream = this.agent.streamEvents(
+    const eventStream = agent.streamEvents(
       { messages: [new HumanMessage(message)] },
       { version: 'v2' },
     );
