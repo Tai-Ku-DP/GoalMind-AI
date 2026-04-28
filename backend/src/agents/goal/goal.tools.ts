@@ -238,7 +238,6 @@ export function createGoalTools(
         cache.set(cacheKey, result);
         return result;
       } catch (err: unknown) {
-        console.log('getGoalDetail error', err);
         const error = err as {
           response?: { status?: number };
           message?: string;
