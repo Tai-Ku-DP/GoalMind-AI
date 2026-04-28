@@ -111,8 +111,6 @@ export function GoalCard({ goal }: { goal: GoalData }) {
   const cfg = RISK_CONFIG[goal.risk] ?? RISK_CONFIG.LOW;
   const isOverdue = goal.overdueDays > 0;
 
-  console.log("goal", goal);
-
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       {/* Risk badge */}
