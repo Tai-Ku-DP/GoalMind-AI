@@ -9,6 +9,8 @@ import {
 } from "./ui/tooltip";
 import { SuggestedActionsView, QuickCreateActionButton, type SuggestedAction } from "./TodoCard";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PriorityAction {
@@ -436,7 +438,7 @@ function QuickCreateIssueButton({
   const handleCreate = async () => {
     setState("loading");
     try {
-      const res = await fetch("/api/issues", {
+      const res = await fetch(`${API_URL}/api/issues`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

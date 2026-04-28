@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import dayjs from "dayjs";
 import { ChevronUp, ChevronDown, Equal } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** Đồng bộ với Simplamo: NOT_STARTED | PLAN | ON_TRACK | DONE */
@@ -281,7 +283,7 @@ async function apiCreateTodo(
   action: SuggestedAction,
   ownerId?: string,
 ): Promise<{ id: string }> {
-  const res = await fetch("/api/todos", {
+  const res = await fetch(`${API_URL}/api/todos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
