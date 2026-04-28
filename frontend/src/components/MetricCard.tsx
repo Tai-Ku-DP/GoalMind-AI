@@ -7,7 +7,11 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "./ui/tooltip";
-import { SuggestedActionsView, QuickCreateActionButton, type SuggestedAction } from "./TodoCard";
+import {
+  SuggestedActionsView,
+  QuickCreateActionButton,
+  type SuggestedAction,
+} from "./TodoCard";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -355,7 +359,7 @@ function HistoryBars({
               ? val >= effectiveGoal
               : val <= effectiveGoal;
             const tooltipContent = (
-              <div className="flex flex-col gap-1 min-w-[100px]">
+              <div className="flex flex-col gap-1 min-w-25">
                 <span className="text-[10px] text-gray-400 font-medium">
                   {fmt(h.weekStart)} &ndash; {fmt(h.weekEnd)}
                 </span>
@@ -433,7 +437,9 @@ function QuickCreateIssueButton({
   issueTitle: string;
   ownerId?: string;
 }) {
-  const [state, setState] = React.useState<"idle" | "loading" | "done" | "error">("idle");
+  const [state, setState] = React.useState<
+    "idle" | "loading" | "done" | "error"
+  >("idle");
 
   const handleCreate = async () => {
     setState("loading");
@@ -449,7 +455,9 @@ function QuickCreateIssueButton({
         }),
       });
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { message?: string };
+        const err = (await res.json().catch(() => ({}))) as {
+          message?: string;
+        };
         throw new Error(err.message ?? `HTTP ${res.status}`);
       }
       setState("done");
@@ -495,7 +503,12 @@ function QuickCreateIssueButton({
 
 const URGENCY_CONFIG: Record<
   PriorityAction["urgency"],
-  { dot: string; label: string; badge: string; priority: "HIGH" | "MEDIUM" | "LOW" }
+  {
+    dot: string;
+    label: string;
+    badge: string;
+    priority: "HIGH" | "MEDIUM" | "LOW";
+  }
 > = {
   THIS_WEEK: {
     dot: "bg-red-500",
@@ -506,7 +519,8 @@ const URGENCY_CONFIG: Record<
   TWO_WEEKS: {
     dot: "bg-amber-400",
     label: "2 tuần tới",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+    badge:
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
     priority: "MEDIUM",
   },
   MISSING_DATA: {
@@ -532,14 +546,19 @@ function PriorityActionsSection({
       </p>
       <ul className="mt-1 space-y-0">
         {actions.map((action, i) => {
-          const cfg = URGENCY_CONFIG[action.urgency] ?? URGENCY_CONFIG.TWO_WEEKS;
+          const cfg =
+            URGENCY_CONFIG[action.urgency] ?? URGENCY_CONFIG.TWO_WEEKS;
           return (
             <li
               key={i}
               className="flex items-start gap-2 border-b border-gray-100 py-2 last:border-none dark:border-gray-800"
             >
-              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
-              <span className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badge}`}>
+              <span
+                className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`}
+              />
+              <span
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badge}`}
+              >
                 {cfg.label}
               </span>
               <span className="flex-1 text-xs text-gray-700 dark:text-gray-300">
@@ -573,12 +592,14 @@ const SEVERITY_CONFIG: Record<
   HIGH: {
     dot: "bg-orange-500",
     label: "HIGH",
-    badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
+    badge:
+      "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
   },
   MEDIUM: {
     dot: "bg-amber-400",
     label: "MEDIUM",
-    badge: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-300",
+    badge:
+      "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-300",
   },
   LOW: {
     dot: "bg-gray-400",
@@ -608,8 +629,12 @@ function DiscussionPointsSection({
               key={i}
               className="flex items-start gap-2 border-b border-gray-100 py-2 last:border-none dark:border-gray-800"
             >
-              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
-              <span className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badge}`}>
+              <span
+                className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`}
+              />
+              <span
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badge}`}
+              >
                 {cfg.label}
               </span>
               <span className="flex-1 text-xs text-gray-700 dark:text-gray-300">
