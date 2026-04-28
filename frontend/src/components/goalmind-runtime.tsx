@@ -140,6 +140,23 @@ export function GoalMindRuntimeProvider({
 
       const decoder = new TextDecoder();
       let assistantContent = "";
+      let pendingChunk = "";
+      let lastFlushAt = 0;
+
+      const flushAssistantContent = () => {
+        if (!pendingChunk) return;
+        assistantContent += pendingChunk;
+        pendingChunk = "";
+        lastFlushAt = Date.now();
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: "assistant",
+            content: assistantContent,
+          };
+          return updated;
+        });
+      };
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -168,21 +185,17 @@ export function GoalMindRuntimeProvider({
               setToolEverEnded(true);
             } else if (parsed.content) {
               setContentStarted(true);
-              assistantContent += parsed.content;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantContent,
-                };
-                return updated;
-              });
+              pendingChunk += parsed.content;
+              if (Date.now() - lastFlushAt >= 80) {
+                flushAssistantContent();
+              }
             }
           } catch {
             // skip malformed SSE chunks
           }
         }
       }
+      flushAssistantContent();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";

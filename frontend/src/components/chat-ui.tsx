@@ -191,9 +191,9 @@ function AIThinkingSteps({ elapsedSeconds }: { elapsedSeconds: number }) {
   const step3: StepStatus = contentStarted ? "active" : "pending";
 
   const steps: ThinkingStep[] = [
-    { label: "Đang lấy dữ liệu...", status: step1 },
-    { label: "Đang phân tích với AI...", status: step2 },
-    { label: "Đang tạo kết quả...", status: step3 },
+    { label: "Đang lấy dữ liệu từ hệ thống...", status: step1 },
+    { label: "Đang tổng hợp và suy luận...", status: step2 },
+    { label: "Đang soạn nội dung trả lời...", status: step3 },
   ];
 
   // Sequential reveal: step N becomes visible only after step N-1 is done
@@ -215,6 +215,11 @@ function AIThinkingSteps({ elapsedSeconds }: { elapsedSeconds: number }) {
           </span>
         )}
       </div>
+      {elapsedSeconds >= 4 && !contentStarted && (
+        <p className="text-xs text-blue-700/90 dark:text-blue-300/90">
+          Đang chuẩn bị câu trả lời chi tiết... ({elapsedSeconds}s)
+        </p>
+      )}
     </div>
   );
 }
@@ -609,11 +614,9 @@ function AssistantMessageContent() {
 
   // ① Nothing received yet
   if (isStreaming && !rawText) {
-    // Only show fake steps when tools are actually being called
     if (activeTool !== null || toolEverEnded) {
       return <AIThinkingSteps elapsedSeconds={elapsedSeconds} />;
     }
-    // Normal conversational question — just show a minimal typing indicator
     return (
       <span className="flex gap-1 py-1">
         {[0, 1, 2].map((i) => (
