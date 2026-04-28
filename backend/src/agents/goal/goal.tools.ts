@@ -51,6 +51,7 @@ export function createGoalTools(
           list = list.filter(
             (r) =>
               r.ownerId === currentUserId ||
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
               (r.rockOwner as any)?._id === currentUserId,
           );
         }
